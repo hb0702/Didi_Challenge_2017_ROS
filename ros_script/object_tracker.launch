@@ -10,7 +10,9 @@
          value="$(find velodyne_pointcloud)/params/32db.yaml"/>
   </include>
 
-  <node name="bag_publisher" pkg="kor_didi_pkg" type="bag_publisher" args="$(arg bag_file_path)" respawn="false" output="screen" required="true"/>
-  <node name="py_processor" pkg="kor_didi_pkg" type="py_processor.py" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
+  <node name="preprocessor" pkg="object_tracker" type="preprocessor" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
+  <node name="detector" pkg="object_tracker" type="detector" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
+  <node name="tracker" pkg="object_tracker" type="tracker" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
+  <node name="bag_publisher" pkg="object_tracker" type="bag_publisher" args="$(arg bag_file_path)" respawn="false" output="screen" required="true"/>
 
 </launch>

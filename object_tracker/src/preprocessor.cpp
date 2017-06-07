@@ -50,6 +50,10 @@ public:
 
 		dMat_ = cv::Mat(yMax_ + 1, xMax_ + 1, CV_32S);
 		zMat_ = cv::Mat(yMax_ + 1, xMax_ + 1, CV_32S);
+
+		// create a 100x100x100 8-bit array
+		int sz[] = {100, 100, 100};
+		Mat bigCube(3, sz, CV_8U, Scalar::all(0));
 	}
 
 	~CProcessor()
