@@ -1,0 +1,16 @@
+<launch>
+  <!-- declare arg to be passed in -->
+  <arg name="bag_file_path" />
+
+  <!-- start nodelet manager and driver nodelets -->
+  <include file="$(find velodyne_driver)/launch/nodelet_manager.launch" />
+  <!-- start cloud nodelet -->
+  <include file="$(find velodyne_pointcloud)/launch/cloud_nodelet.launch">
+    <arg name="calibration"
+         value="$(find velodyne_pointcloud)/params/32db.yaml"/>
+  </include>
+
+  <node name="bag_publisher" pkg="kor_didi_pkg" type="bag_publisher" args="$(arg bag_file_path)" respawn="false" output="screen" required="true"/>
+  <node name="py_processor" pkg="kor_didi_pkg" type="py_processor.py" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
+
+</launch>
