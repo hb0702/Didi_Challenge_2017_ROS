@@ -67,9 +67,9 @@ class detector:
 			y.append(p[1])
 			z.append(p[2])
 		#rp.loginfo("-- %d Point converted, p0: %.2f %.2f %.2f", len(x_pos), x_pos[0], y_pos[0], z_pos[0])
-		all_boxes = predict_boxes(x, y, z)
+		box_info = predict_boxes(x, y, z)
 		# unlock process
-		rp.loginfo("- Process finished, %d boxes", len(all_boxes))
+		rp.loginfo("- Process finished, %d got boxes", len(all_boxes))
 		self.process_locked = False
 	
 	def rotation(theta, points):
@@ -139,7 +139,24 @@ class detector:
 
 			all_boxes = np.vstack((all_boxes, boxes))
 
-		return all_boxes
+		num_boxes = len(all_boxes)
+		box_info = np.zeros((num_boxes,7), dtype=np.float32)
+
+		# compose box info - [label, l, w, h, px, py, pz, yaw]
+		lv2d = box[:,3,:2] - box[:,0,:2]
+		l = np.linalg.norm(lv2d, axis=1)
+		w = np.linalg.norm(box[:,1,:2] - box[:,0,:2], axis=1)
+		h = box[:,4,2] - box[:,0,2]
+		center = (box[:,0] + box[:,6]) * 0.5
+		lv2dn = lv2d / l
+		yaw = math.atan2(lv2dn[:,1], lv2dn[:,0])
+		box_info[:,1] = l
+		box_info[:,2] = w
+		box_info[:,3] = h
+		box_info[:,4:7] = center
+		box_info[:,7] = yaw
+
+		return box_info
 
 def listen():
 	processor = detector()
