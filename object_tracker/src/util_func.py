@@ -222,7 +222,7 @@ def cylindrical_projection_for_test(lidar,
     phi = phi[indices]
     coord = [[x[i],y[i],z[i],theta[i],phi[i],d[i]] for i in range(len(x))]
     
-    view = np.zeros([y_max+1, x_max+1, 6],dtype=np.float32)
+    view = np.zeros([y_max+1, x_max+1, 6], dtype=np.float32)
     view[y_view,x_view] = coord
     
     return view
