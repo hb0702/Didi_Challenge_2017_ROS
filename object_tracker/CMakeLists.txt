@@ -88,6 +88,6 @@ target_link_libraries(tracker ${catkin_LIBRARIES})
 ## Uncomment if the package has a setup.py
 catkin_python_setup()
 
-catkin_install_python(PROGRAMS src/detector src/util_func src/tracklet DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+catkin_install_python(PROGRAMS src/detector DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 

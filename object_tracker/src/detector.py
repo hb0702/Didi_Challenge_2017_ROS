@@ -19,8 +19,6 @@ from keras.utils.generic_utils import get_custom_objects
 #loss = SSD_Loss(neg_pos_ratio=neg_pos_ratio, alpha=alpha)
 get_custom_objects().update({"my_loss": my_loss})
 
-from util_func import *
-
 class detector:
 
 	def __init__(self):
@@ -74,6 +72,14 @@ class detector:
 		rp.loginfo("- Process finished, %d boxes", len(all_boxes))
 		self.process_locked = False
 	
+	def rotation(theta, points):
+		v = np.sin(theta)
+		u = np.cos(theta)
+		out = np.copy(point)
+		out[:,0] = u*point[:,0] + v*point[:,1]
+		out[:,1] = -v*point[:,0] + u*point[:,1]
+		return out
+
 	def predict_boxes(self, x, y, z):
 		d = np.sqrt(np.square(x)+np.square(y))
 		theta = np.arctan2(-y, x)
