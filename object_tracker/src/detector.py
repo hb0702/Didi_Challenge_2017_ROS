@@ -8,7 +8,7 @@ import numpy as np
 
 from sensor_msgs.msg import PointCloud2
 import sensor_msgs.point_cloud2 as pc2
-#from sensor_msgs.msg import Image
+from std_msgs.msg import Float32MultyArray, MultiArrayDimension
 
 import tensorflow as tf
 import keras
@@ -48,7 +48,8 @@ class detector:
 		# model
 		self.model = load_model('../../model/model_May_23_epoch_02.h5')
 		# subscribers
-		self.point_subscriber = rp.Subscriber("/velodyne_points", PointCloud2, self.on_points_received)
+		self.subscriber = rp.Subscriber("/velodyne_points", PointCloud2, self.on_points_received)
+		self.publisher = rp.Publisher("/detected_boxes", Float32MultyArray, queue_size=10)
 	
 	def on_points_received(self, data):
 		rp.loginfo(rp.get_caller_id() + " Point received")
@@ -68,6 +69,10 @@ class detector:
 			z.append(p[2])
 		#rp.loginfo("-- %d Point converted, p0: %.2f %.2f %.2f", len(x_pos), x_pos[0], y_pos[0], z_pos[0])
 		box_info = predict_boxes(x, y, z)
+		arr = Float32MultyArray()
+		flat_box_info = np.reshape(box_info, (-1))
+		arr.data = flat_box_info.tolist()
+		pub.publish(arr)
 		# unlock process
 		rp.loginfo("- Process finished, %d got boxes", len(all_boxes))
 		self.process_locked = False
@@ -160,6 +165,7 @@ class detector:
 
 def listen():
 	processor = detector()
+	rp.loginfo("Detector: initialized")
 	# In ROS, nodes are uniquely named. If two nodes with the same
 	# node are launched, the previous one is kicked off. The
 	# anonymous=True flag means that rospy will choose a unique

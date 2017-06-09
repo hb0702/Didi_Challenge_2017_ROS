@@ -23,6 +23,7 @@ int main(int argc, char **argv)
 	opts.topics.push_back(bagLidarTopic);
 	
 	rosbag::Player player(opts);
+	ROS_INFO("Bag Player: initialized");
 	
 	try
 	{
