@@ -8,8 +8,8 @@ class Tracker
 public:
     Tracker()
     {
-        ros::Subscriber sub = n.subscribe("/detected_boxes", 10, &Tracker::onBoxesReceived, this);
-        ros::Publisher pub = n.advertise<visualization_msgs::MarkerArray>("/bounding_boxes", 1);
+        ros::Subscriber sub = n.subscribe("/detector/boxes", 10, &Tracker::onBoxesReceived, this);
+        ros::Publisher pub = n.advertise<visualization_msgs::MarkerArray>("/tracker/boxes", 1);
     }
 
     ~Tracker()

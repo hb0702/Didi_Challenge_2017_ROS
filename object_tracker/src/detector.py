@@ -49,7 +49,7 @@ class detector:
 		self.model = load_model('../../model/model_May_23_epoch_02.h5')
 		# subscribers
 		self.subscriber = rp.Subscriber("/velodyne_points", PointCloud2, self.on_points_received)
-		self.publisher = rp.Publisher("/detected_boxes", Float32MultyArray, queue_size=10)
+		self.publisher = rp.Publisher("/detector/boxes", Float32MultyArray, queue_size=10)
 	
 	def on_points_received(self, data):
 		rp.loginfo(rp.get_caller_id() + " Point received")
