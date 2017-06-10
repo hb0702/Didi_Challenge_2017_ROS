@@ -1,3 +1,0 @@
-#!/bin/bash
-echo "Hello!"
-echo ${CATKIN_PACKAGE_BIN_DESTINATION}
