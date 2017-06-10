@@ -1,7 +1,0 @@
-<launch>
-  <!-- declare arg to be passed in -->
-  <arg name="bag_file_path" />
-
-  <node name="bag_publisher" pkg="object_tracker" type="bag_publisher" args="$(arg bag_file_path)" respawn="false" output="screen" required="true"/>
-
-</launch>

@@ -14,7 +14,7 @@ function usage()
     echo "  |Arguments|"
     echo "  -----------"
     echo "  Help: -h --help"
-    echo "  Bag file path: --bag_file"
+    echo "  Bag file path: --file_path"
     echo ""
 }
 
@@ -27,7 +27,7 @@ while [ "$1" != "" ]; do
             usage
             exit
             ;;
-        --bag_file)
+        --file_path)
             FILE_PATH=$VALUE
             shift
             ;;
@@ -40,5 +40,5 @@ while [ "$1" != "" ]; do
     shift
 done
 
-echo -e "\e[92mRunning object_tracker with $FILE_PATH\e[0m"
-roslaunch bag_publisher.launch bag_file_path:=$FILE_PATH
+echo -e "\e[92mPublish image and lidar points in $FILE_PATH\e[0m"
+roslaunch bag_player.launch bag_file_path:=$FILE_PATH
