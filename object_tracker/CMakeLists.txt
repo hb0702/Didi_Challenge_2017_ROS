@@ -14,11 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   velodyne_msgs
 )
 
-## Uncomment this if the package has a setup.py. This macro ensures
-## modules and global scripts declared therein get installed
-# catkin_python_setup()
-
-## Generate messages in the 'msg' folder
+# Generate messages in the 'msg' folder
 # add_message_files(
 #   FILES
 #   Message1.msg
@@ -64,17 +60,16 @@ include_directories(
 #   src/${PROJECT_NAME}/object_tracker.cpp
 # )
 
-#This will generate message header file before building the target
+# This will generate message header file before building the target
 #add_dependencies(image_processor ???message_file_header_cpp??)
 #add_dependencies(kf_localizer ???message_file_header_cpp??)
 
-#This will create executables of the nodes
+# This will create executables of the nodes
 add_executable(bag_player src/bag_player.cpp)
 add_executable(tracker src/tracker.cpp)
 
-#This will link executables to the appropriate libraries
+# This will link executables to the appropriate libraries
 target_link_libraries(bag_player ${catkin_LIBRARIES})
-target_link_libraries(preprocessor ${catkin_LIBRARIES})
 target_link_libraries(tracker ${catkin_LIBRARIES})
 
 # set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
@@ -85,9 +80,13 @@ target_link_libraries(tracker ${catkin_LIBRARIES})
 #   ${catkin_LIBRARIES}
 # )
 
-## Uncomment if the package has a setup.py
+# Uncomment if the package has a setup.py
+# modules and global scripts declared therein get installed
 catkin_python_setup()
 
-catkin_install_python(PROGRAMS src/detector DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+# Install python scripts
+catkin_install_python(PROGRAMS scripts/detector.py DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
+# Install model
+install(FILES model/model.h5 DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 

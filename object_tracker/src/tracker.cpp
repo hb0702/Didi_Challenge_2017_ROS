@@ -6,10 +6,10 @@
 class Tracker
 {
 public:
-    Tracker()
-    {
+    Tracker(ros::NodeHandle n)
+    {   
         ros::Subscriber sub = n.subscribe("/detector/boxes", 10, &Tracker::onBoxesReceived, this);
-        ros::Publisher pub = n.advertise<visualization_msgs::MarkerArray>("/tracker/boxes", 1);
+        pub_ = n.advertise<visualization_msgs::MarkerArray>("/tracker/boxes", 1);
     }
 
     ~Tracker()
@@ -26,7 +26,7 @@ public:
 
         visualization_msgs::MarkerArray arr;
 
-        for (auto it = msg->data.begin(); it != msg->data.end(); it+=8)
+        for (std::vector<float>::const_iterator it = msg->data.begin(); it != msg->data.end(); it+=8)
         {
             int label = int((*it) + 0.1);
             float l = *(it+1);
@@ -38,7 +38,7 @@ public:
             float yaw = *(it+7);
 
             visualization_msgs::Marker marker;
-            marker.header.frame_id = "/my_frame"
+            marker.header.frame_id = "base_link";
             marker.type = visualization_msgs::Marker::CUBE;
             marker.action = visualization_msgs::Marker::ADD;
             marker.pose.position.x = px;
@@ -58,9 +58,12 @@ public:
             arr.markers.push_back(marker);
         }
 
-        pub.publish(arr);
-        ROS_INFO("Tracker: published %d bounding boxes", arr.markers.size());
+        pub_.publish(arr);
+        ROS_INFO("Tracker: published %d bounding boxes", (int)arr.markers.size());
     }
+
+private:
+    ros::Publisher pub_;
 };
 
 int main(int argc, char **argv)
@@ -68,7 +71,7 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "tracker");
     ros::NodeHandle n;
 
-    Tracker tracker;
+    Tracker tracker(n);
 
     ros::spin();
 
