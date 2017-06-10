@@ -105,7 +105,7 @@ class detector:
 		all_boxes = np.empty((0,8,3))
 
 		# repeat for horizontal segments
-		for ns in range(num_hor_seg):
+		for ns in range(self.num_hor_seg):
 			self.input_buf.fill(0)
 
 			x_view = np.int16(np.ceil((theta*180/np.pi - self.hor_fov_arr[ns][0])/self.h_res))
@@ -123,7 +123,7 @@ class detector:
 			theta_f = theta[indices]
 			phi_f = phi[indices]
 
-			coord = [[x_F[i],y_f[i],z_f[i],theta_f[i],phi_f[i],d_f[i]] for i in range(len(x_f))]
+			coord = [[x_f[i],y_f[i],z_f[i],theta_f[i],phi_f[i],d_f[i]] for i in range(len(x_f))]
 
 			self.input_buf[y_view,x_view] = coord
 
