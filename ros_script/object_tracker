@@ -1,50 +1,8 @@
 #! /bin/bash
 
-# arguments
-FILE_PATH=""
-
 #SCRIPT_PATH=$(readlink -f "$0")
 #SCRIPT_DIR=$(dirname "$SCRIPT")
 #sudo chmod 755 $scriptdir/../object_tracker/src/detector.py $scriptdir/../object_tracker/src/detector.py
 
-# help function
-function usage()
-{
-    echo "  -----------"
-    echo "  |Arguments|"
-    echo "  -----------"
-    echo "  Help: -h --help"
-    echo "  Bag file path: --bag_file"
-    echo ""
-}
-
-# parse argument
-while [ "$1" != "" ]; do
-    PARAM="$1"
-    VALUE="$2"
-    case $PARAM in
-        -h | --help)
-            usage
-            exit
-            ;;
-        --bag_file)
-            FILE_PATH=$VALUE
-            shift
-            ;;
-        *)
-            echo "ERROR: unknown parameter \"$PARAM\""
-            usage
-            exit 1
-            ;;
-    esac
-    shift
-done
-
 echo -e "\e[92mStart object_tracker\e[0m"
 roslaunch object_tracker.launch
-
-if [ $FILE_PATH != "" ]
-then
-    echo -e "\e[92mPublishing images and lidar points in $FILE_PATH\e[0m"
-    roslaunch bag_publisher.launch bag_file_path:=$FILE_PATH
-fi
