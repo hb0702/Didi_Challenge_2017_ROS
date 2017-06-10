@@ -10,6 +10,7 @@ public:
     {   
         ros::Subscriber sub = n.subscribe("/detector/boxes", 10, &Tracker::onBoxesReceived, this);
         pub_ = n.advertise<visualization_msgs::MarkerArray>("/tracker/boxes", 1);
+        ROS_INFO("Tracker: initialized");
     }
 
     ~Tracker()

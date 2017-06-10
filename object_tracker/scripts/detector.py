@@ -8,16 +8,19 @@ import numpy as np
 
 from sensor_msgs.msg import PointCloud2
 import sensor_msgs.point_cloud2 as pc2
-from std_msgs.msg import Float32MultyArray, MultiArrayDimension
+from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 
-import tensorflow as tf
 import keras
 from keras.models import load_model
 from keras.optimizers import Adam
-from fully_conv_model_for_lidar import fcn_model
+
+from model import fcn_model, my_loss
+
 from keras.utils.generic_utils import get_custom_objects
 #loss = SSD_Loss(neg_pos_ratio=neg_pos_ratio, alpha=alpha)
 get_custom_objects().update({"my_loss": my_loss})
+
+import os 
 
 class detector:
 
@@ -46,19 +49,24 @@ class detector:
 		# input buffer
 		self.input_buf = np.zeros([self.y_max+1, self.x_max+1, 6], dtype=np.float32);
 		# model
-		self.model = load_model('./model.h5')
+		dir_path = os.path.dirname(os.path.realpath(__file__))
+		self.model = load_model(dir_path + '/../model/model.h5')
 		# subscribers
 		self.subscriber = rp.Subscriber("/velodyne_points", PointCloud2, self.on_points_received)
-		self.publisher = rp.Publisher("/detector/boxes", Float32MultyArray, queue_size=10)
-	
+		self.publisher = rp.Publisher("/detector/boxes", Float32MultiArray, queue_size=10)
+		rp.loginfo("Detector: initialized")
+		print "Detector: initialized"
+
 	def on_points_received(self, data):
-		rp.loginfo(rp.get_caller_id() + " Point received")
+		rp.loginfo("Detector: " + rp.get_caller_id() + " Point received")
+		print "Detector: " + rp.get_caller_id() + " Point received"
 		if (self.process_locked):
 			rp.loginfo("- Process locked")
 			return
 		# lock process
 		self.process_locked = True
-		rp.loginfo("- Process started")
+		rp.loginfo("Detector: process started")
+		print "Detector: process started"
 		# process points
 		x = []
 		y = []
@@ -68,13 +76,14 @@ class detector:
 			y.append(p[1])
 			z.append(p[2])
 		#rp.loginfo("-- %d Point converted, p0: %.2f %.2f %.2f", len(x_pos), x_pos[0], y_pos[0], z_pos[0])
-		box_info = predict_boxes(x, y, z)
-		arr = Float32MultyArray()
+		box_info = self.predict_boxes(x, y, z)
+		arr = Float32MultiArray()
 		flat_box_info = np.reshape(box_info, (-1))
 		arr.data = flat_box_info.tolist()
 		pub.publish(arr)
 		# unlock process
-		rp.loginfo("- Process finished, %d got boxes", len(all_boxes))
+		rp.loginfo("Detector: process finished, %d got boxes", len(all_boxes))
+		print "Detector: process finished, %d got boxes", len(all_boxes)
 		self.process_locked = False
 	
 	def rotation(theta, points):
@@ -86,6 +95,9 @@ class detector:
 		return out
 
 	def predict_boxes(self, x, y, z):
+		x = np.array(x)
+		y = np.array(y)
+		z = np.array(z)
 		d = np.sqrt(np.square(x)+np.square(y))
 		theta = np.arctan2(-y, x)
 		phi = -np.arctan2(z, d)
@@ -165,7 +177,6 @@ class detector:
 
 def listen():
 	processor = detector()
-	rp.loginfo("Detector: initialized")
 	# In ROS, nodes are uniquely named. If two nodes with the same
 	# node are launched, the previous one is kicked off. The
 	# anonymous=True flag means that rospy will choose a unique

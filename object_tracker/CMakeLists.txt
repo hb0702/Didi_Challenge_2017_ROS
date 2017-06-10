@@ -85,7 +85,7 @@ target_link_libraries(tracker ${catkin_LIBRARIES})
 catkin_python_setup()
 
 # Install python scripts
-catkin_install_python(PROGRAMS scripts/detector.py DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+catkin_install_python(PROGRAMS scripts/detector.py scripts/model.py DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 # Install model
 install(FILES model/model.h5 DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
