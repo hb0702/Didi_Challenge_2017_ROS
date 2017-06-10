@@ -1,6 +1,4 @@
 <launch>
-  <!-- declare arg to be passed in -->
-  <arg name="bag_file_path" />
 
   <!-- start nodelet manager and driver nodelets -->
   <include file="$(find velodyne_driver)/launch/nodelet_manager.launch" />
@@ -12,7 +10,5 @@
 
   <node name="detector" pkg="object_tracker" type="detector.py" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
   <node name="tracker" pkg="object_tracker" type="tracker" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
-
-  <node name="bag_publisher" pkg="object_tracker" type="bag_publisher" args="$(arg bag_file_path)" respawn="false" output="screen" required="true"/>
 
 </launch>

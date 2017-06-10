@@ -40,11 +40,5 @@ while [ "$1" != "" ]; do
     shift
 done
 
-echo -e "\e[92mStart object_tracker\e[0m"
-roslaunch object_tracker.launch
-
-if [ $FILE_PATH != "" ]
-then
-    echo -e "\e[92mPublishing images and lidar points in $FILE_PATH\e[0m"
-    roslaunch bag_publisher.launch bag_file_path:=$FILE_PATH
-fi
+echo -e "\e[92mRunning object_tracker with $FILE_PATH\e[0m"
+roslaunch bag_publisher.launch bag_file_path:=$FILE_PATH
