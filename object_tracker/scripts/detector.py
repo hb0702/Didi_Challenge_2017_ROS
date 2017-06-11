@@ -61,13 +61,13 @@ class detector:
 		print "Detector: initialized"
 
 	def on_points_received(self, data):
-		rp.loginfo("Detector: " + rp.get_caller_id() + " Point received")
+		rp.loginfo("Detector: point received")
 		if (self.process_locked):
-			rp.loginfo("- Process locked")
+			rp.loginfo("Detector: Process locked")
 			return
 		# lock process
 		self.process_locked = True
-		rp.loginfo("Detector: process started")
+		#rp.loginfo("Detector: process started")
 		# process points
 		x = []
 		y = []
@@ -85,7 +85,7 @@ class detector:
 		arr.data = flat_box_info.tolist()
 		self.publisher.publish(arr)
 		# unlock process
-		rp.loginfo("Detector: process finished, %d boxes", len(box_info))
+		rp.loginfo("Detector: published %d boxes", len(box_info))
 		self.process_locked = False
 	
 	def rotation(self, theta, points):

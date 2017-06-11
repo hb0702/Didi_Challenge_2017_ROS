@@ -21,12 +21,7 @@ public:
 
     void onBoxesReceived(const std_msgs::Float32MultiArray::ConstPtr& msg)
     {
-        ROS_INFO("Tracker: received %d bounding boxes", (int)msg->data.size());
-
-        if (msg->data.size() < 1)
-        {
-            return;
-        }
+        ROS_INFO("Tracker: received %d bounding boxes", (int)msg->data.size()/8);
 
         if (processLocked_)
         {
