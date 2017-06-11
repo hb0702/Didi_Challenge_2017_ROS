@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import rospy as rp
 import numpy as np
-#import copy
+import math
 
 #import cv2
 #from cv_bridge import CvBridge, CvBridgeError
@@ -10,6 +10,7 @@ from sensor_msgs.msg import PointCloud2
 import sensor_msgs.point_cloud2 as pc2
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 
+import tensorflow as tf
 import keras
 from keras.models import load_model
 from keras.optimizers import Adam
@@ -28,8 +29,8 @@ class detector:
 		# lock
 		self.process_locked = False
 		# input params
-		self.x_max = 256
-		self.y_max = 64
+		self.x_max = 255
+		self.y_max = 63
 		self.ver_fov = (-24.4, 15.)
 		self.v_res = 0.42
 		self.num_hor_seg = 2
@@ -51,6 +52,8 @@ class detector:
 		# model
 		dir_path = os.path.dirname(os.path.realpath(__file__))
 		self.model = load_model(dir_path + '/../model/model.h5')
+		self.graph = tf.get_default_graph()
+		self.seg_thres = 0.5
 		# subscribers
 		self.subscriber = rp.Subscriber("/velodyne_points", PointCloud2, self.on_points_received)
 		self.publisher = rp.Publisher("/detector/boxes", Float32MultiArray, queue_size=10)
@@ -59,14 +62,12 @@ class detector:
 
 	def on_points_received(self, data):
 		rp.loginfo("Detector: " + rp.get_caller_id() + " Point received")
-		print "Detector: " + rp.get_caller_id() + " Point received"
 		if (self.process_locked):
 			rp.loginfo("- Process locked")
 			return
 		# lock process
 		self.process_locked = True
 		rp.loginfo("Detector: process started")
-		print "Detector: process started"
 		# process points
 		x = []
 		y = []
@@ -76,22 +77,23 @@ class detector:
 			y.append(p[1])
 			z.append(p[2])
 		#rp.loginfo("-- %d Point converted, p0: %.2f %.2f %.2f", len(x_pos), x_pos[0], y_pos[0], z_pos[0])
-		box_info = self.predict_boxes(x, y, z)
+		box_info = np.empty((0,8))
+		with self.graph.as_default():
+			box_info = self.predict_boxes(x, y, z)
 		arr = Float32MultiArray()
 		flat_box_info = np.reshape(box_info, (-1))
 		arr.data = flat_box_info.tolist()
-		pub.publish(arr)
+		self.publisher.publish(arr)
 		# unlock process
-		rp.loginfo("Detector: process finished, %d got boxes", len(all_boxes))
-		print "Detector: process finished, %d got boxes", len(all_boxes)
+		rp.loginfo("Detector: process finished, %d boxes", len(box_info))
 		self.process_locked = False
 	
-	def rotation(theta, points):
+	def rotation(self, theta, points):
 		v = np.sin(theta)
 		u = np.cos(theta)
-		out = np.copy(point)
-		out[:,0] = u*point[:,0] + v*point[:,1]
-		out[:,1] = -v*point[:,0] + u*point[:,1]
+		out = np.copy(points)
+		out[:,0] = u*points[:,0] + v*points[:,1]
+		out[:,1] = -v*points[:,0] + u*points[:,1]
 		return out
 
 	def predict_boxes(self, x, y, z):
@@ -126,13 +128,14 @@ class detector:
 			coord = [[x_f[i],y_f[i],z_f[i],theta_f[i],phi_f[i],d_f[i]] for i in range(len(x_f))]
 
 			self.input_buf[y_view,x_view] = coord
+			cylindrical_view = self.input_buf[:,:,[5,2]].reshape(1,64,256,2)
 
 			# predict
-			pred = self.model.predict(self.input_buf)
+			pred = self.model.predict(cylindrical_view)
 			pred = pred[0]
 			pred = pred.reshape(-1,8)
 			view = self.input_buf.reshape(-1,6)
-			pred_indices = pred[:,0] > seg_thres
+			pred_indices = pred[:,0] > self.seg_thres
 			thres_pred = pred[pred_indices]
 			thres_view = view[pred_indices]
 
@@ -140,8 +143,8 @@ class detector:
 			boxes = np.zeros((num_boxes,8,3))
 
 			# compose boxes
-			boxes[:,0] = thres_view[:,:3] - rotation(thres_view[:,3],thres_pred[:,1:4])
-			boxes[:,6] = thres_view[:,:3] - rotation(thres_view[:,3],thres_pred[:,4:7])
+			boxes[:,0] = thres_view[:,:3] - self.rotation(thres_view[:,3],thres_pred[:,1:4])
+			boxes[:,6] = thres_view[:,:3] - self.rotation(thres_view[:,3],thres_pred[:,4:7])
 			boxes[:,2,:2] = boxes[:,6,:2]
 			boxes[:,2,2] = boxes[:,0,2]
 
@@ -157,16 +160,15 @@ class detector:
 			all_boxes = np.vstack((all_boxes, boxes))
 
 		num_boxes = len(all_boxes)
-		box_info = np.zeros((num_boxes,7), dtype=np.float32)
+		box_info = np.zeros((num_boxes,8), dtype=np.float32)
 
 		# compose box info - [label, l, w, h, px, py, pz, yaw]
-		lv2d = box[:,3,:2] - box[:,0,:2]
+		lv2d = all_boxes[:,3,:2] - all_boxes[:,0,:2]
 		l = np.linalg.norm(lv2d, axis=1)
-		w = np.linalg.norm(box[:,1,:2] - box[:,0,:2], axis=1)
-		h = box[:,4,2] - box[:,0,2]
-		center = (box[:,0] + box[:,6]) * 0.5
-		lv2dn = lv2d / l
-		yaw = math.atan2(lv2dn[:,1], lv2dn[:,0])
+		w = np.linalg.norm(all_boxes[:,1,:2] - all_boxes[:,0,:2], axis=1)
+		h = all_boxes[:,4,2] - all_boxes[:,0,2]
+		center = (all_boxes[:,0] + all_boxes[:,6]) * 0.5
+		yaw = [math.atan2(lv2d[i,1], lv2d[i,0]) for i in range(len(lv2d))]
 		box_info[:,1] = l
 		box_info[:,2] = w
 		box_info[:,3] = h

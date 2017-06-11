@@ -8,8 +8,9 @@ class Tracker
 public:
     Tracker(ros::NodeHandle n)
     {   
-        ros::Subscriber sub = n.subscribe("/detector/boxes", 10, &Tracker::onBoxesReceived, this);
+        sub_ = n.subscribe("/detector/boxes", 10, &Tracker::onBoxesReceived, this);
         pub_ = n.advertise<visualization_msgs::MarkerArray>("/tracker/boxes", 1);
+        processLocked_ = false;
         ROS_INFO("Tracker: initialized");
     }
 
@@ -20,10 +21,20 @@ public:
 
     void onBoxesReceived(const std_msgs::Float32MultiArray::ConstPtr& msg)
     {
+        ROS_INFO("Tracker: received %d bounding boxes", (int)msg->data.size());
+
         if (msg->data.size() < 1)
         {
             return;
         }
+
+        if (processLocked_)
+        {
+            ROS_INFO("Tracker: process locked");
+            return;
+        }
+
+        processLocked_ = true;
 
         visualization_msgs::MarkerArray arr;
 
@@ -39,7 +50,7 @@ public:
             float yaw = *(it+7);
 
             visualization_msgs::Marker marker;
-            marker.header.frame_id = "base_link";
+            marker.header.frame_id = "velodyne";
             marker.type = visualization_msgs::Marker::CUBE;
             marker.action = visualization_msgs::Marker::ADD;
             marker.pose.position.x = px;
@@ -61,10 +72,13 @@ public:
 
         pub_.publish(arr);
         ROS_INFO("Tracker: published %d bounding boxes", (int)arr.markers.size());
+        processLocked_ = false;
     }
 
 private:
+    ros::Subscriber sub_;
     ros::Publisher pub_;
+    bool processLocked_;
 };
 
 int main(int argc, char **argv)
