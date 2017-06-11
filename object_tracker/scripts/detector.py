@@ -32,7 +32,7 @@ class detector:
 		self.x_max = 255
 		self.y_max = 63
 		self.ver_fov = (-24.4, 15.)
-		self.v_res = 0.42
+		self.v_res = 1.
 		self.num_hor_seg = 2
 		# derived input params
 		self.hor_fov_arr = []
@@ -53,12 +53,22 @@ class detector:
 		dir_path = os.path.dirname(os.path.realpath(__file__))
 		self.model = load_model(dir_path + '/../model/model.h5')
 		self.graph = tf.get_default_graph()
-		self.seg_thres = 0.5
+		self.seg_thres = 0.07
 		# subscribers
 		self.subscriber = rp.Subscriber("/velodyne_points", PointCloud2, self.on_points_received)
 		self.publisher = rp.Publisher("/detector/boxes", Float32MultiArray, queue_size=10)
 		rp.loginfo("Detector: initialized")
 		print "Detector: initialized"
+		# #test
+		# lidar = np.load(dir_path + '/../../one_frame_data/lidar_270.npy')
+		# x = lidar[:,0]
+		# y = lidar[:,1]
+		# z = lidar[:,2]
+		# with self.graph.as_default():
+		# 	boxes, box_info = self.predict_boxes(x, y, z)
+		# 	print len(boxes)
+		# 	print boxes[0]
+		# 	print box_info[0]
 
 	def on_points_received(self, data):
 		rp.loginfo("Detector: point received")
@@ -76,7 +86,6 @@ class detector:
 			x.append(p[0])
 			y.append(p[1])
 			z.append(p[2])
-		#rp.loginfo("-- %d Point converted, p0: %.2f %.2f %.2f", len(x_pos), x_pos[0], y_pos[0], z_pos[0])
 		box_info = np.empty((0,8))
 		with self.graph.as_default():
 			box_info = self.predict_boxes(x, y, z)
@@ -156,6 +165,11 @@ class detector:
 			boxes[:,1,0] = (cos_phi*z_pred[:,0] + sin_phi*z_pred[:,1])*cos_phi + boxes[:,0,0]
 			boxes[:,1,1] = (-sin_phi*z_pred[:,0] + cos_phi*z_pred[:,1])*cos_phi + boxes[:,0,1]
 			boxes[:,1,2] = boxes[:,0,2]
+
+			boxes[:,3] = boxes[:,0] + boxes[:,2] - boxes[:,1]
+			boxes[:,4] = boxes[:,0] + boxes[:,6] - boxes[:,2]
+			boxes[:,5] = boxes[:,1] + boxes[:,4] - boxes[:,0]
+			boxes[:,7] = boxes[:,4] + boxes[:,6] - boxes[:,5]
 
 			all_boxes = np.vstack((all_boxes, boxes))
 
