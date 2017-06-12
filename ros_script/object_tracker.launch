@@ -1,4 +1,6 @@
 <launch>
+  <!-- declare arg to be passed in -->
+  <arg name="use_cpp_node" />
 
   <!-- start nodelet manager and driver nodelets -->
   <include file="$(find velodyne_driver)/launch/nodelet_manager.launch" />
@@ -8,7 +10,9 @@
          value="$(find velodyne_pointcloud)/params/32db.yaml"/>
   </include>
 
-  <node name="detector" pkg="object_tracker" type="detector.py" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
-  <node name="tracker" pkg="object_tracker" type="tracker" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
+  <node name="detector" pkg="object_tracker" type="detector.py" args="$(arg use_cpp_node)"  respawn="false" output="screen" cwd="ROS_HOME" required="false" />
+  <group if="$(arg use_cpp_node)">
+  	<node name="tracker" pkg="object_tracker" type="tracker" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
+  </group>
 
 </launch>

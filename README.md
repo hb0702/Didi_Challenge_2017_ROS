@@ -44,12 +44,12 @@
 
 * Open catkin_ws/src/CMakeLists.txt on Qt Creator, set build directory to ~/catkin_ws/build
 
-### How to run kor_didi_pkg
+### How to run object_tracker
 * Go to catkin workspace
 
         $ cd ~/catkin_ws/src
 
-* Download kor_didi_pkg source
+* Download object_tracker source
 
 * Go to catkin workspacee
 
@@ -58,27 +58,21 @@
 
         $ catkin_make
 
-* Run kor_didi_run.sh with .bag file path
+* Run object_tracker in ros_script
 
-        $ sh '/home/parkjaeil0108/catkin_ws/src/kor_didi_run.sh' '/home/parkjaeil0108/challenge/Didi-Training-Release-1/approach_1.bag'
+        $ object_tracker
 
-### How to extract points(.npy) from .bag file
-* Go to catkin workspace source
+        Add --use_cpp_node option if you want to use cpp node
 
-        $ cd ~/catkin_ws/src
+        $ object_tracker -- use_cpp_node
 
-* Download or git clone kor_didi_pkg source
+* Run rviz if you want to visualize point
 
-* Go to catkin workspacee
+        $ rviz
 
-        $ cd ~/catkin_ws
-        
-* Build
+        Fixed frame: velodyne
+        Topics: PointCloud2(/velodyne_points), MarkerArray(/tracker/boxes)
 
-        $ catkin_make
+* Run bag_player in ros_script with bag file path
 
-* Run extract_points.sh with .bag file path
-
-        $ sh '/home/parkjaeil0108/catkin_ws/src/extract_points.sh' '/home/parkjaeil0108/challenge/Didi-Training-Release-1/approach_1.bag'
-
-* In the directory .bag file located, (bag file name)/lidar folder will be created, and .npy files will be saved in it.
+        $ bag_player --file_path '/home/parkjaeil0108/challenge/Didi-Training-Release-1/approach_1.bag'

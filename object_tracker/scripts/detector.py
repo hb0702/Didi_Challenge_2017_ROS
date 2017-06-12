@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import sys
 import rospy as rp
 import numpy as np
 import math
@@ -9,6 +10,7 @@ import math
 from sensor_msgs.msg import PointCloud2
 import sensor_msgs.point_cloud2 as pc2
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension
+from visualization_msgs.msg import Marker, MarkerArray
 
 import tensorflow as tf
 import keras
@@ -25,7 +27,7 @@ import os
 
 class detector:
 
-	def __init__(self):
+	def __init__(self, use_cpp_node):
 		# lock
 		self.process_locked = False
 		# input params
@@ -54,24 +56,46 @@ class detector:
 		self.model = load_model(dir_path + '/../model/model.h5')
 		self.graph = tf.get_default_graph()
 		self.seg_thres = 0.07
-		# subscribers
-		self.subscriber = rp.Subscriber("/velodyne_points", PointCloud2, self.on_points_received)
-		self.publisher = rp.Publisher("/detector/boxes", Float32MultiArray, queue_size=10)
+		# communication
+		self.use_cpp_node = True if use_cpp_node == '1' else False
+		self.initialize_communication()
 		rp.loginfo("Detector: initialized")
 		print "Detector: initialized"
-		# #test
-		# lidar = np.load(dir_path + '/../../one_frame_data/lidar_270.npy')
-		# x = lidar[:,0]
-		# y = lidar[:,1]
-		# z = lidar[:,2]
-		# with self.graph.as_default():
-		# 	boxes, box_info = self.predict_boxes(x, y, z)
-		# 	print len(boxes)
-		# 	print boxes[0]
-		# 	print box_info[0]
+
+	def initialize_communication(self):
+		self.subscriber = rp.Subscriber("/velodyne_points", PointCloud2, self.on_points_received, queue_size=1)
+		self.sub_count = 0
+		if self.use_cpp_node:
+			self.publisher = rp.Publisher("/detector/boxes", Float32MultiArray, queue_size=1)
+		else:
+			self.publisher = rp.Publisher("/tracker/boxes", MarkerArray, queue_size=1)
+			self.marker_array = MarkerArray()
+			self.max_marker_count = 1000
+			for i in range(self.max_marker_count):
+				marker = Marker()
+				marker.id = i
+				marker.header.frame_id = "velodyne"
+				marker.type = marker.CUBE
+				marker.action = marker.ADD
+				marker.pose.position.x = 0.0
+				marker.pose.position.y = 0.0
+				marker.pose.position.z = 0.0
+				marker.pose.orientation.x = 0.0
+				marker.pose.orientation.y = 0.0
+				marker.pose.orientation.z = 0.0
+				marker.pose.orientation.w = 1.0
+				marker.scale.x = 1.0
+				marker.scale.y = 1.0
+				marker.scale.z = 1.0
+				marker.color.a = 0.0
+				marker.color.r = 0.0
+				marker.color.g = 0.0
+				marker.color.b = 0.0
+				self.marker_array.markers.append(marker)
 
 	def on_points_received(self, data):
-		rp.loginfo("Detector: point received")
+		self.sub_count += 1		
+		rp.loginfo("Detector %d: point received", self.sub_count)
 		if (self.process_locked):
 			rp.loginfo("Detector: Process locked")
 			return
@@ -87,16 +111,51 @@ class detector:
 			y.append(p[1])
 			z.append(p[2])
 		box_info = np.empty((0,8))
+		# predict
 		with self.graph.as_default():
 			box_info = self.predict_boxes(x, y, z)
+		# publish
+		if self.use_cpp_node:
+			self.publish_detected_boxes(box_info)
+		else:
+			self.publish_markers(box_info)
+		# unlock process
+		self.process_locked = False
+
+	def publish_detected_boxes(self, box_info):
 		arr = Float32MultiArray()
 		flat_box_info = np.reshape(box_info, (-1))
 		arr.data = flat_box_info.tolist()
+		# publish
 		self.publisher.publish(arr)
-		# unlock process
-		rp.loginfo("Detector: published %d boxes", len(box_info))
-		self.process_locked = False
-	
+		#rp.loginfo("Detector: published %d boxes", len(box_info))
+
+	def publish_markers(self, box_info):
+		num_boxes = len(box_info)
+		# update markers
+		num_markers = min(num_boxes, self.max_marker_count)
+		for i in range(num_markers):
+			info = box_info[i]
+			marker = self.marker_array.markers[i]
+			marker.pose.position.x = info[4]
+			marker.pose.position.y = info[5]
+			marker.pose.position.z = info[6]
+			marker.pose.orientation.z = info[7]
+			marker.scale.x = info[1]
+			marker.scale.y = info[2]
+			marker.scale.z = info[3]
+			marker.color.a = 0.3
+			marker.color.r = 1.0 if info[0] == 0 else 0.0
+			marker.color.b = 0.0 if info[0] == 0 else 1.0
+		# hide markers not used
+		if num_boxes < self.max_marker_count:
+			for i in range(num_boxes, self.max_marker_count):
+				marker = self.marker_array.markers[i]
+				marker.color.a = 0.0
+		# publish
+		self.publisher.publish(self.marker_array)
+		rp.loginfo("Detector: published %d markers", num_markers)
+
 	def rotation(self, theta, points):
 		v = np.sin(theta)
 		u = np.cos(theta)
@@ -191,8 +250,8 @@ class detector:
 
 		return box_info
 
-def listen():
-	processor = detector()
+def listen(use_cpp_node):
+	processor = detector(use_cpp_node)
 	# In ROS, nodes are uniquely named. If two nodes with the same
 	# node are launched, the previous one is kicked off. The
 	# anonymous=True flag means that rospy will choose a unique
@@ -203,4 +262,4 @@ def listen():
 	rp.spin()
 
 if __name__ == '__main__':
-	listen()
+	listen(sys.argv[1])
