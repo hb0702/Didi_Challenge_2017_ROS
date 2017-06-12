@@ -25,7 +25,7 @@
 
         $ pip install keras
 
-### How to setup development environment with Qt
+### How to setup development environment with Qt (optional)
 * Go to catkin workspace
 
         $ cd ~/catkin_ws/src
@@ -62,17 +62,21 @@
 
         $ object_tracker
 
-        Add --use_cpp_node option if you want to use cpp node
+    - Add --use_cpp_node option if you want to use cpp node
+    
+            $ object_tracker --use_cpp_node
 
-        $ object_tracker -- use_cpp_node
-
-* Run rviz if you want to visualize point
+* Run rviz to visualize (optional)
 
         $ rviz
 
-        Fixed frame: velodyne
-        Topics: PointCloud2(/velodyne_points), MarkerArray(/tracker/boxes)
+    - Fixed frame: velodyne
+    - Topics: PointCloud2(/velodyne_points), MarkerArray(/tracker/boxes)
 
 * Run bag_player in ros_script with bag file path
 
-        $ bag_player --file_path '/home/parkjaeil0108/challenge/Didi-Training-Release-1/approach_1.bag'
+        $ bag_player --file_path [full path of .bag file]
+
+    - ex)
+    
+            $ bag_player --file_path '/home/parkjaeil0108/challenge/Didi-Training-Release-1/approach_1.bag'
