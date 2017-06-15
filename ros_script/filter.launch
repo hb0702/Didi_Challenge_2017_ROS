@@ -10,8 +10,6 @@
          value="$(find velodyne_pointcloud)/params/32db.yaml"/>
   </include>
 
-  <group if="$(arg use_cpp_node)">
-  	<node name="filter" pkg="object_tracker" type="filter" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
-  </group>
+  <node name="filter" pkg="object_tracker" type="filter" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
 
 </launch>

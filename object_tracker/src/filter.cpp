@@ -17,6 +17,8 @@ public:
 	{
     	subscriber_ = n.subscribe("/velodyne_points", 1, &Filter::onPointsReceived, this);
 		cloud_ = _PointCloud::Ptr(new _PointCloud());
+
+		ROS_INFO("Filter: initialized");
 	}
 
 	~Filter()
@@ -36,7 +38,7 @@ private:
 		}
 
 		_Point front = points.front();
-		ROS_INFO("Got %zd points, first point: %.2f, %.2f, %.2f", pointCount, front.x, front.y, front.z);
+		ROS_INFO("Filter: got %zd points, first point: %.2f, %.2f, %.2f", pointCount, front.x, front.y, front.z);
 
 		// do whatever you want!
 	}
