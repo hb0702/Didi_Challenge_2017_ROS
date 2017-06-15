@@ -2,6 +2,7 @@
 
 ### How to setup environment
 * Install python-2.7 or Anaconda-2 (recommended)
+* Install pandas version 0.19.2
 * Install ROS
 
         $ sudo apt-get install ros-indigo-desktop-full
@@ -51,6 +52,8 @@
 
 * Download object_tracker source
 
+        $ git clone 'this git url'
+
 * Go to catkin workspacee
 
         $ cd ~/catkin_ws
@@ -79,4 +82,4 @@
 
     - ex)
     
-            $ bag_player --file_path '/home/parkjaeil0108/challenge/Didi-Training-Release-1/approach_1.bag'
+            $ bag_player --file_path /home/parkjaeil0108/challenge/Didi-Training-Release-1/approach_1.bag
