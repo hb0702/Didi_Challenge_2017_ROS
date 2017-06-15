@@ -1,0 +1,4 @@
+#! /bin/bash
+
+echo -e "\e[92mStart filter\e[0m"
+roslaunch filter.launch

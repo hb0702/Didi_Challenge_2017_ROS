@@ -67,10 +67,12 @@ include_directories(
 # This will create executables of the nodes
 add_executable(bag_player src/bag_player.cpp)
 add_executable(tracker src/tracker.cpp)
+add_executable(filter src/filter.cpp)
 
 # This will link executables to the appropriate libraries
 target_link_libraries(bag_player ${catkin_LIBRARIES})
 target_link_libraries(tracker ${catkin_LIBRARIES})
+target_link_libraries(filter ${catkin_LIBRARIES})
 
 # set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
 
