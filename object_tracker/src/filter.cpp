@@ -4,44 +4,36 @@
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 
+const float _PI = 3.14159265358979f;
+
 typedef pcl::PointXYZ _Point;
 typedef pcl::PointCloud<pcl::PointXYZ> _PointCloud;
 typedef _PointCloud::VectorType _PointVector;
 
-const float _PI = 3.14159265358979f;
-
-struct V3i
+template<_Value>
+struct _V3
 {
-	V3i(int _x, int _y, int _z)
-	{
-		x = _x;
-		y = _y;
-		z = _z;
-	}
-
-	int x;
-	int y;
-	int z;
-};
-
-struct V3d
-{
-	V3d(double _x, double _y, double _z)
+public:
+	_V3(_Value _x, _Value _y, _Value _z)
 	{
 		set(_x, _y, _z);
 	}
 
-	void set(double _x, double _y, double _z)
+	void set(_Value _x, _Value _y, _Value _z)
 	{
 		x = _x;
 		y = _y;
 		z = _z;
 	}
 
-	double x;
-	double y;
-	double z;
+
+	_Value x;
+	_Value y;
+	_Value z;
 };
+
+typedef _V3<int> V3i;
+typedef _V3<double> V3d;
 
 class VoxelMap
 {
