@@ -35,6 +35,23 @@ public:
 typedef _V3<int> V3i;
 typedef _V3<double> V3d;
 
+class Cluster
+{
+public:
+	Cluster()
+	{
+
+	}
+
+	~Cluster()
+	{
+
+	}
+
+private:
+	std::vector<V3d> points_;
+}
+
 class VoxelMap
 {
 public:
@@ -119,7 +136,7 @@ public:
 		grid_[x][y][z] += 1;
 	}
 
-	void makeClusters(int hitThres)
+	void makeClusters(int hitThres, std::vector<Cluster>& clusters)
 	{
 		// create hitmap
 		char*** hitmap;
@@ -138,7 +155,6 @@ public:
 			}
 		}
 
-		std::stack<V3i> clusters;
 		std::stack<V3i> seeds;
 		V3i vec;
 		// start from the top layer
@@ -154,7 +170,7 @@ public:
 					}
 
 					seeds.clear();
-					clusters.clear();
+					Cluster cluster;
 
 					vec.set(i, j, k);
 					seeds.push(vec);
@@ -175,7 +191,7 @@ public:
 									{
 										continue;
 									}
-									if (grid_[x][y][z] >= hitThres)
+									if (test(x, y, z, hitThres))
 									{
 										vec.set(x, y, z);
 										seeds.push(vec);
@@ -186,7 +202,7 @@ public:
 							}
 						}
 
-						// TODO: save clustered points
+						clusters.push_back(cluster);
 					}
 				}
 			}
@@ -208,14 +224,21 @@ public:
 
 
 private:
-	int value(int ix, int iy, int iz)
+	int value(int ix, int iy, int iz) const
 	{
 		return grid_[x][y][z];
 	}
 
-	bool test(int ix, int iy, int iz, int thres)
+	bool test(int ix, int iy, int iz, int thres) const
 	{
 		return grid_[ix][iy][iz] >= thres;
+	}
+
+	V3d toCentroid(int ix, int iy, int iz) const
+	{
+		return V3d(ox_ + (ix + 0.5) * r_,
+			oy_ + (iy + 0.5) * r_,
+			oz_ + (iz + 0.5) * r_);
 	}
 
 private:
@@ -270,7 +293,7 @@ private:
 
 	}
 
-	void markGroundBV(const _PointVector& points, std::vector<char>& groundBV)
+	void markGroundBV(const _PointVector& points, std::vector<char>& groundBV) const
 	{
 		_PointVector::iterator pit = points.begin();
 		std::vector<char>::iterator bit = groundBV.begin();
@@ -282,8 +305,6 @@ private:
 			}
 		}
 	}
-
-
 
 private:
 	ros::Subscriber subscriber_;
