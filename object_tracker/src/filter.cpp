@@ -291,11 +291,11 @@ public:
 								}
 							}
 						}
+					}
 
-						if (cluster.valid())
-						{
-							clusters.push_back(cluster);
-						}
+					if (cluster.valid())
+					{
+						clusters.push_back(cluster);
 					}
 				}
 			}
@@ -327,9 +327,9 @@ private:
 
 	V3d centroid(int ix, int iy, int iz) const
 	{
-		return V3d(ox_ + (ix + 0.5) * r_,
-					oy_ + (iy + 0.5) * r_,
-					oz_ + (iz + 0.5) * r_);
+		return V3d(ox_ + ((double)ix + 0.5) * r_,
+					oy_ + ((double)iy + 0.5) * r_,
+					oz_ + ((double)iz + 0.5) * r_);
 	}
 
 private:
@@ -357,6 +357,8 @@ public:
     	subscriber_ = n.subscribe("/velodyne_points", 1, &Filter::onPointsReceived, this);
     	publisher_ = n.advertise<visualization_msgs::MarkerArray>("/filter/boxes", 1);
 		cloud_ = _PointCloud::Ptr(new _PointCloud());
+		maxBase_ = -1.27 + 0.3;
+		clusterHitThres_ = 7;
 		voxelMap_ = new VoxelMap(-40.0, -40.0, -1.27, 80.0, 80.0, 4.0, 0.4);
 
 		ROS_INFO("Filter: initialized");
@@ -422,7 +424,7 @@ private:
 
 		// cluster
 		std::list<VoxelCluster> clusters;
-		voxelMap_->makeClusters(7, clusters);
+		voxelMap_->makeClusters(clusterHitThres_, clusters);
 		size_t clusterCount = clusters.size();
 		if (clusterCount == 0u)
 		{
@@ -430,7 +432,7 @@ private:
 		}
 		ROS_INFO("Filter: got %zd clusters", clusterCount);
 
-		// publish markers
+		// update markers
 		int markerCnt = 0;
 		std::vector<visualization_msgs::Marker>::iterator mit = markerArr_.markers.begin();
 		std::list<VoxelCluster>::iterator cit = clusters.begin();
@@ -462,7 +464,7 @@ private:
 		std::vector<char>::iterator bit = groundBV.begin();
 		for (; pit != points.end(); ++pit, ++bit)
 		{
-			if (pit->z < -1.0)
+			if (pit->z < maxBase_)
 			{
 				*bit = 1;
 			}
@@ -473,6 +475,8 @@ private:
 	ros::Subscriber subscriber_;
 	ros::Publisher publisher_;
 	_PointCloud::Ptr cloud_;
+	double maxBase_;
+	int clusterHitThres_;
 	VoxelMap* voxelMap_;
 	visualization_msgs::MarkerArray markerArr_;
 };
