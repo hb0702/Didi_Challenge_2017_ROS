@@ -2,6 +2,10 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+#include <pcl/ModelCoefficients.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
@@ -64,6 +68,8 @@ public:
 		maxBase_ = maxBase;
 		minSize_ = minSize;
 		maxSize_ = maxSize;
+		min_.set(1000, 1000, 1000);
+		max_.set(-1000, -1000, -1000);
 	}
 
 	~VoxelCluster()
@@ -108,14 +114,14 @@ public:
 
 	bool valid() const
 	{
+
 		double w = max_.x - min_.x;
 		double h = max_.y - min_.y;
 		double d = max_.z - min_.z;
 
 		return min_.z < maxBase_ 
-			&& w > minSize_.x && w < maxSize_.x
-			&& h > minSize_.y && h < maxSize_.y
-			&& d > minSize_.z && d < maxSize_.z;
+			&& w < maxSize_.x && h < maxSize_.y && d < maxSize_.z
+			&& (w > minSize_.x || h > minSize_.y) && d > minSize_.z;
 	}
 
 private:
@@ -161,16 +167,15 @@ public:
 		h_ = (int)(height / resolution + 0.5);
 		d_ = (int)(depth / resolution + 0.5);
 
-		clusterMaxBase_ = originZ + 1.2 * resolution;
-		clusterMinSize_ = V3d(0.35, 0.35, 0.75);
-		clusterMaxSize_ = V3d(3.1, 3.1, 1.7);
+		clusterMaxBase_ = originZ + 0.6;
+		clusterMinSize_ = V3d(3 * r_ - 0.5, 3 * r_ - 0.5, 2 * r_ - 0.5);
+		clusterMaxSize_ = V3d(4.1, 4.1, 2.1);
 
 		// init grid
 		grid_ = new int**[w_];
 		for (int i = 0; i < w_; ++i)
 		{
 			grid_[i] = new int*[h_];
-
 			for (int j = 0; j < h_; ++j)
 			{
 				grid_[i][j] = new int[d_];
@@ -178,6 +183,21 @@ public:
 				for (int k = 0; k < d_; ++k)
 				{
 					grid_[i][j][k] = 0;
+				}
+			}
+		}
+
+		// create hitmap
+		hitmap_ = new char**[w_];
+		for (int i = 0; i < w_; ++i)
+		{
+			hitmap_[i] = new char*[h_];
+			for (int j = 0; j < h_; ++j)
+			{
+				hitmap_[i][j] = new char[d_];
+				for (int k = 0; k < d_; ++k)
+				{
+					hitmap_[i][j][k] = 0;
 				}
 			}
 		}
@@ -196,6 +216,18 @@ public:
 				}
 			}
 		}
+
+		// reset hitmap
+		for (int i = 0; i < w_; ++i)
+		{
+			for (int j = 0; j < h_; ++j)
+			{
+				for (int k = 0; k < d_; ++k)
+				{
+					hitmap_[i][j][k] = 0;
+				}
+			}
+		}
 	}
 
 	~VoxelMap()
@@ -207,11 +239,20 @@ public:
 			{
 				delete[] grid_[i][j];
 			}
-
 			delete[] grid_[i];
 		}
-
 		delete[] grid_;
+
+		// delete hitmap
+		for (int i = 0; i < w_; ++i)
+		{
+			for (int j = 0; j < h_; ++j)
+			{
+				delete[] hitmap_[i][j];
+			}
+			delete[] hitmap_[i];
+		}
+		delete[] hitmap_;
 	}
 
 public:	
@@ -221,9 +262,9 @@ public:
 		int y = (int)((py - oy_) / r_ + 0.5);
 		int z = (int)((pz - oz_) / r_ + 0.5);
 
-		if (x < 0 || x > w_ - 1
-			|| y < 0 || y > h_ - 1
-			|| z < 0 || z > d_ - 1)
+		if (x < 0 || x >= w_
+			|| y < 0 || y >= h_
+			|| z < 0 || z >= d_)
 		{
 			return;
 		}
@@ -233,21 +274,6 @@ public:
 
 	void makeClusters(int hitThres, std::list<VoxelCluster>& clusters) const
 	{
-		// create hitmap
-		char*** hitmap;
-		for (int i = 0; i < w_; ++i)
-		{
-			hitmap[i] = new char*[h_];
-			for (int j = 0; j < h_; ++j)
-			{
-				hitmap[i][j] = new char[d_];
-				for (int k = 0; k < d_; ++k)
-				{
-					hitmap[i][j][k] = 0;
-				}
-			}
-		}
-		
 		// start from the top layer
 		for (int i = 1; i < w_ - 1; ++i)
 		{
@@ -255,17 +281,17 @@ public:
 			{
 				for (int k = d_ - 2; k > 0; --k)
 				{
-					if (hitmap[i][j][k] == 1)
-					{
+					if (hitmap_[i][j][k] == 1)
+					{						
 						continue;
 					}
 
 					std::stack<Index> seeds;
 					VoxelCluster cluster(r_, clusterMaxBase_, clusterMinSize_, clusterMaxSize_);
-
+					
 					seeds.push(Index(i, j, k));
 					cluster.add(centroid(i, j, k));
-					hitmap[i][j][k] = 1;
+					hitmap_[i][j][k] = 1;
 
 					while (!seeds.empty())
 					{
@@ -277,17 +303,22 @@ public:
 							{
 								for (int z = seed.z - 1; z <= seed.z + 1; ++z)
 								{
-									if ((x == seed.x && y == seed.y && z == seed.z) 
-										|| hitmap[x][y][z] == 1)
+									if ((x == seed.x && y == seed.y && z == seed.z)
+										|| x == -1 || y == -1 || z == -1
+										|| x == w_ || y == h_ || z == d_
+										|| hitmap_[x][y][z] == 1)
 									{
 										continue;
 									}
 									if (test(x, y, z, hitThres))
 									{
-										seeds.push(Index(x, y, z));
+										if (z > 0)
+										{
+											seeds.push(Index(x, y, z));
+										}
 										cluster.add(centroid(x, y, z));
 									}
-									hitmap[x][y][z] = 1;
+									hitmap_[x][y][z] = 1;
 								}
 							}
 						}
@@ -300,17 +331,6 @@ public:
 				}
 			}
 		}
-
-		// delete hitmap
-		for (int i = 0; i < w_; ++i)
-		{
-			for (int j = 0; j < h_; ++j)
-			{
-				delete[] hitmap[i][j];
-			}
-			delete[] hitmap[i];
-		}
-		delete[] hitmap;
 	}
 
 
@@ -347,6 +367,7 @@ private:
 	V3d clusterMinSize_;
 	V3d clusterMaxSize_;
 	int*** grid_;
+	char*** hitmap_;
 };
 
 class Filter
@@ -357,9 +378,9 @@ public:
     	subscriber_ = n.subscribe("/velodyne_points", 1, &Filter::onPointsReceived, this);
     	publisher_ = n.advertise<visualization_msgs::MarkerArray>("/filter/boxes", 1);
 		cloud_ = _PointCloud::Ptr(new _PointCloud());
-		maxBase_ = -1.27 + 0.3;
-		clusterHitThres_ = 7;
-		voxelMap_ = new VoxelMap(-40.0, -40.0, -1.27, 80.0, 80.0, 4.0, 0.4);
+		maxBase_ = -1.27 + 0.2;
+		clusterHitThres_ = 9;
+		voxelMap_ = new VoxelMap(-40.0, -40.0, -1.27, 80.0, 80.0, 4, 0.4);
 
 		ROS_INFO("Filter: initialized");
 
@@ -404,24 +425,23 @@ private:
 		{
 			return;
 		}
-		ROS_INFO("Filter: got %zd points", pointCount);
 
 		// get ground bit vector
 		std::vector<char> groundBV(pointCount, 0);
-		markGroundBV(points, groundBV);
+		getGroundBV_simple(groundBV);
 
 		// mark voxel map
 		voxelMap_->clear();
-		_PointVector::iterator pit = points.begin();
+		_PointVector::iterator ipit = points.begin();
 		std::vector<char>::iterator bit = groundBV.begin();
-		for (; pit != points.end(); ++pit, ++bit)
+		for (; ipit != points.end(); ++ipit, ++bit)
 		{
 			if (*bit == 0)
 			{
-				voxelMap_->hit(pit->x, pit->y, pit->z);
+				voxelMap_->hit(ipit->x, ipit->y, ipit->z);
 			}
 		}
-
+		
 		// cluster
 		std::list<VoxelCluster> clusters;
 		voxelMap_->makeClusters(clusterHitThres_, clusters);
@@ -448,18 +468,47 @@ private:
 	            mit->color.a = 0.3;
 			}
 		}
-		for (; mit != markerArr_.markers.end(); ++mit, ++markerCnt)
+		for (; mit != markerArr_.markers.end(); ++mit)
         {
             mit->color.a = 0.0;
         }
 
         // publish markers
         publisher_.publish(markerArr_);
-        ROS_INFO("Tracker: published %d markers", markerCnt);
 	}
 
-	void markGroundBV(const _PointVector& points, std::vector<char>& groundBV) const
+	void getGroundBV(std::vector<char>& groundBV) const
 	{
+		pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
+		pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
+		pcl::SACSegmentation<pcl::PointXYZ> seg;
+		seg.setOptimizeCoefficients (true);
+		seg.setModelType (pcl::SACMODEL_PLANE);
+		seg.setMethodType (pcl::SAC_RANSAC);
+		seg.setDistanceThreshold (0.02);
+		seg.setInputCloud (cloud_);
+		seg.segment (*inliers, *coefficients);
+
+		if (inliers->indices.size () == 0)
+		{
+			return;
+		}
+
+		// for ()
+
+		// std::vector<char>::iterator bit = groundBV.begin();
+		// for (; pit != points.end(); ++pit, ++bit)
+		// {
+		// 	if (pit->z < maxBase_)
+		// 	{
+		// 		*bit = 1;
+		// 	}
+		// }
+	}
+
+	void getGroundBV_simple(std::vector<char>& groundBV) const
+	{
+		_PointVector points = cloud_->points;
 		_PointVector::const_iterator pit = points.begin();
 		std::vector<char>::iterator bit = groundBV.begin();
 		for (; pit != points.end(); ++pit, ++bit)
