@@ -13,6 +13,15 @@
 const int MAX_MARKER_COUNT = 1000;
 const float MAX_VALUE = 1000.0f;
 
+const float GROUND_Z = -1.27f;
+const float GROUND_EPS = 0.2f;
+const float RESOLUTION = 0.4f;
+const float ROI_RADIUS = 22.0f;
+const int CLUSTER_POINT_COUNT_THRESHOLD = 14;
+const float PEDESTRIAN_MAX_WIDTH = 1.0f;
+const float CAR_MAX_WIDTH = 3.4f;
+const float CLUSTER_MAX_DEPTH = 2.0f;
+
 typedef pcl::PointXYZ _Point;
 typedef pcl::PointCloud<pcl::PointXYZ> _PointCloud;
 typedef _PointCloud::VectorType _PointVector;
@@ -138,7 +147,7 @@ private:
 	std::list<Vector3> points_;
 	Vector3 min_;
 	Vector3 max_;
-}
+};
 
 #pragma region cluster builder
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -385,10 +394,10 @@ public:
 		cloud_ = _PointCloud::Ptr(new _PointCloud());
 
 		// init cluster builder
-		builder_ = new ClusterBuilder(0.0, 0.0, -1.27, 22/*radius*/, 0.4/*resolution*/)
+		builder_ = new ClusterBuilder(0.0, 0.0, GROUND_Z, ROI_RADIUS, RESOLUTION)
 		
 		// ground filtering option
-		maxGround_ = -1.27 + 0.2;
+		maxGround_ = GROUND_Z + GROUND_EPS;
 
 		// car filtering option
 		carMin_ = Vector3(-1.5, -1.0, -1.3);
@@ -396,10 +405,10 @@ public:
 
 		// cluster filtering option
 		mode_ = mode;
-		clusterMinPointCount_ = 14;
-		pedMaxWidth_ = 1.0;
-		carMinWidth_ = 3.4;
-		clusterMaxDepth_ = 2.0;
+		clusterMinPointCount_ = CLUSTER_POINT_COUNT_THRESHOLD;
+		pedMaxWidth_ = PEDESTRIAN_MAX_WIDTH;
+		carMaxWidth_ = CAR_MAX_WIDTH;
+		clusterMaxDepth_ = CLUSTER_MAX_DEPTH;
 
 		// init markers
         for (int i = 0; i < MAX_MARKER_COUNT; i++)
@@ -542,7 +551,7 @@ private:
 				*bit = 1;
 				continue;				
 			}
-			
+
 			// cluster size
 			value_type maxWidth = std::max(cit->max().x - cit->min().x, cit->max().y - cit->min().y);
 			if (mode == "car")
@@ -587,6 +596,9 @@ private:
 				mit->pose.position.x = center->x;
 				mit->pose.position.y = center->y;
 				mit->pose.position.z = center->z;
+				mit->scale.x = cit->max().x - cit->min().x;
+				mit->scale.y = cit->max().y - cit->min().y;
+				mit->scale.z = cit->max().z - cit->min().z;
 				mit->color.a = 0.3;
 
 				++mit;
