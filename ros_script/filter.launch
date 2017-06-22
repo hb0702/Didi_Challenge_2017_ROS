@@ -1,6 +1,6 @@
 <launch>
   <!-- declare arg to be passed in -->
-  <!-- <arg name="use_cpp_node" /> -->
+  <arg name="object_mode" />
 
   <!-- start nodelet manager and driver nodelets -->
   <include file="$(find velodyne_driver)/launch/nodelet_manager.launch" />
@@ -10,6 +10,6 @@
          value="$(find velodyne_pointcloud)/params/32db.yaml"/>
   </include>
 
-  <node name="filter" pkg="object_tracker" type="filter" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
+  <node name="filter" pkg="object_tracker" type="filter" args="$(arg object_mode)" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
 
 </launch>

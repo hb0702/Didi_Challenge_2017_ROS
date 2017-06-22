@@ -1,4 +1,58 @@
 #! /bin/bash
+OBJECT_MODE=""
+FIND_CAR=0
+FIND_PED=1
+
+# help function
+function usage()
+{
+    echo "  -----------"
+    echo "  |Arguments|"
+    echo "  -----------"
+    echo "  Help: -h --help"
+    echo "  Find car: --car"
+    echo "  Find pedestrian: --ped"
+    echo ""
+}
+
+# parse argument
+while [ "$1" != "" ]; do
+    PARAM="$1"
+    case $PARAM in
+        -h | --help)
+            usage
+            exit
+            ;;
+        --car)
+            FIND_CAR=1
+            ;;
+        --car)
+            FIND_PED=1
+            ;;
+        *)
+            echo "ERROR: unknown parameter \"$PARAM\""
+            usage
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+# find mode
+if [ $FIND_CAR == 0 ] && [ $FIND_PED == 0]; then
+	echo "ERROR: specify object to find"
+	usage
+	exit 1
+elif [ $FIND_CAR == 1 ] && [ $FIND_PED == 0]; then
+	OBJECT_MODE="car"
+	echo "Find car"
+elif [ $FIND_CAR == 0 ] && [ $FIND_PED == 1]; then
+	OBJECT_MODE="ped"
+	echo "Find pedestrian"
+else
+	OBJECT_MODE="car_ped"
+	echo "Find car and pedestrian"
+fi
 
 echo -e "\e[92mStart filter\e[0m"
-roslaunch filter.launch
+roslaunch filter.launch object_mode:=$OBJECT_MODE

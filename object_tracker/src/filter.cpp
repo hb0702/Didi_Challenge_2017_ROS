@@ -67,12 +67,12 @@ public:
 class Cluster
 {
 public:
-	Cluster(value_type resolution)
+	Cluster(value_type resolution, value_type baseZ)
 	{
 		cellSize_ = resolution;
-		hitCount_ = 0;
-		min_.set(MAX_VALUE, MAX_VALUE, MAX_VALUE);
-		max_.set(-MAX_VALUE, -MAX_VALUE, -MAX_VALUE);
+		pointCount_ = 0;
+		min_.set(MAX_VALUE, MAX_VALUE, baseZ);
+		max_.set(-MAX_VALUE, -MAX_VALUE, baseZ);
 	}
 
 	~Cluster()
@@ -109,7 +109,7 @@ public:
 			max_.z = point.z + 0.5 * cellSize_;
 		}
 
-		hitCount_ = hitCount;
+		pointCount_ = hitCount;
 	}
 
 	const Vector3& min() const
@@ -122,14 +122,19 @@ public:
 		return max_;
 	}
 
-	int hitCount() const
+	Vector3 center() const
 	{
-		return hitCount_;
+		return Vector3(0.5 * (min_.x + max_.x), 0.5 * (min_.y + max_.y), 0.5 * (min_.z + max_.z));
+	}
+
+	int pointCount() const
+	{
+		return pointCount_;
 	}
 
 private:
 	value_type cellSize_;
-	int hitCount_;
+	int pointCount_;
 	std::list<Vector3> points_;
 	Vector3 min_;
 	Vector3 max_;
@@ -248,7 +253,7 @@ public:
 				}
 
 				seeds.clear();
-				Cluster cluster(cellSize_);
+				Cluster cluster(cellSize_, baseZ_);
 
 				seed.push(Index(ix, iy));
 				cluster.add(cellPoint(ix, iy), hitCount(ix, iy));
@@ -315,16 +320,16 @@ private:
 
 	void hit(double px, double py, double pz)
 	{
-		int rx = (int)((px - centerX_) / cellSize_ + 0.5);
-		int ry = (int)((py - centerY_) / cellSize_ + 0.5);
+		int rx = (int)(((value_type)px - centerX_) / cellSize_ + 0.5);
+		int ry = (int)(((value_type)py - centerY_) / cellSize_ + 0.5);
 
 		if (rx * rx + ry * ry > iradius2_)
 		{
 			return;
 		}
 
-		int x = (int)((px - originx_) / cellSize_ + 0.5);
-		int y = (int)((py - originy_) / cellSize_ + 0.5);
+		int x = (int)(((value_type)px - originx_) / cellSize_ + 0.5);
+		int y = (int)(((value_type)py - originy_) / cellSize_ + 0.5);
 
 		if (x < 0 || x >= iwidth_ || y < 0 || y >= iwidth_)
 		{
@@ -391,10 +396,10 @@ public:
 
 		// cluster filtering option
 		mode_ = mode;
-		int clusterMinPointCount_;
-		value_type pedMinWidth_;
-		value_type carMinWidth_;
-		value_type clusterMaxDepth_;
+		clusterMinPointCount_ = 14;
+		pedMaxWidth_ = 1.0;
+		carMinWidth_ = 3.4;
+		clusterMaxDepth_ = 2.0;
 
 		// init markers
         for (int i = 0; i < MAX_MARKER_COUNT; i++)
@@ -441,13 +446,13 @@ private:
 		}
 
 		// mark bit vector - car and ground points
-		_BitVector filterBV(pointCount, 0);
-		markCar(filterBV);
-		markGround_simple(filterBV);
+		_BitVector pointFilterBV(pointCount, 0);
+		markCar(points, pointFilterBV);
+		markGround_simple(points, pointFilterBV);
 
 		// cluster
 		std::list<Cluster> clusters;
-		builder_->run(points, filterBV, clusters);
+		builder_->run(points, pointFilterBV, clusters);
 		size_t clusterCount = clusters.size();
 		if (clusterCount == 0u)
 		{
@@ -455,32 +460,15 @@ private:
 		}
 		ROS_INFO("Filter: got %zd clusters", clusterCount);
 
-		// TODO: filter cluster
-		????
+		// mark bit vector - bad  clusters
+		_BitVector clusterFilterBV(clusterCount, 0);
+		markBadCluster(clusters, clusterFilterBV);
 
-		// update markers
-		int markerCnt = 0;
-		std::vector<visualization_msgs::Marker>::iterator mit = markerArr_.markers.begin();
-		_PointVector::const_iterator pit = sampledPoints.begin();
-		for (; pit != sampledPoints.end(); ++pit, ++mit, ++markerCnt)
-		{
-			mit->pose.position.x = pit->x;
-			mit->pose.position.y = pit->y;
-			mit->pose.position.z = pit->z;
-			mit->color.a = 0.3;
-		}
-		for (; mit != markerArr_.markers.end(); ++mit)
-        {
-            mit->color.a = 0.0;
-        }
-
-        // publish markers
-        publisher_.publish(markerArr_);
+		publishMarkers(clusters, clusterFilterBV);
 	}
 
-	void markCar(_BitVector& filterBV) const
+	void markCar(const _PointVector& points, _BitVector& filterBV) const
 	{
-		_PointVector points = cloud_->points;
 		_PointVector::const_iterator pit = points.begin();
 		_BitVector::iterator bit = filterBV.begin();
 		for (; pit != points.end(); ++pit, ++bit)
@@ -522,9 +510,8 @@ private:
 		// }
 	}
 
-	void markGround_simple(_BitVector& filterBV) const
+	void markGround_simple(const _PointVector& points, _BitVector& filterBV) const
 	{
-		_PointVector points = cloud_->points;
 		_PointVector::const_iterator pit = points.begin();
 		_BitVector::iterator bit = filterBV.begin();
 		for (; pit != points.end(); ++pit, ++bit)
@@ -534,6 +521,85 @@ private:
 				*bit = 1;
 			}
 		}
+	}
+
+	void markBadCluster(const std::list<Cluster>& clusters, _BitVector& filterBV) const
+	{
+		std::list<Cluster>::const_iterator cit = clusters.begin();
+		_BitVector::iterator bit = filterBV.begin();
+		for (; cit != clusters.end(); ++cit, ++bit)
+		{
+			// min point count
+			if (cit->pointCount() < clusterMinPointCount_)
+			{
+				*bit = 1;
+				continue;
+			}
+
+			// max depth
+			if (cit->max().z > clusterMaxDepth_)
+			{
+				*bit = 1;
+				continue;				
+			}
+			
+			// cluster size
+			value_type maxWidth = std::max(cit->max().x - cit->min().x, cit->max().y - cit->min().y);
+			if (mode == "car")
+			{
+				if (maxWidth < pedMaxWidth_ || maxWidth > carMaxWidth_)
+				{
+					*bit = 1;
+					continue;
+				}
+			}
+			if (mode == "ped")
+			{
+				if (maxWidth > pedMaxWidth_)
+				{
+					*bit = 1;
+					continue;
+				}
+			}
+			if (mode == "car_ped")
+			{
+				if (maxWidth > carMaxWidth_)
+				{
+					*bit = 1;
+					continue;
+				}
+			}
+		}
+	}
+
+	void publishMarkers(const std::list<Cluster>& clusters, const _BitVector& filterBV) const
+	{
+		// update markers
+		int markerCnt = 0;
+		std::list<Cluster>::const_iterator cit = clusters.begin();
+		_BitVector::const_iterator bit = filterBV.begin();
+		std::vector<visualization_msgs::Marker>::iterator mit = markerArr_.markers.begin();
+		for (; cit != clusters.end(); ++cit, ++bit)
+		{
+			if (*bit == 0)
+			{
+				Vector3 center = cit->center();
+				mit->pose.position.x = center->x;
+				mit->pose.position.y = center->y;
+				mit->pose.position.z = center->z;
+				mit->color.a = 0.3;
+
+				++mit;
+				++markerCnt;
+			}
+		}
+		for (; mit != markerArr_.markers.end(); ++mit)
+        {
+            mit->color.a = 0.0;
+        }
+
+        // publish markers
+        publisher_.publish(markerArr_);
 	}
 
 private:
@@ -550,8 +616,8 @@ private:
 	// cluster filtering option
 	std::string mode_;
 	int clusterMinPointCount_;
-	value_type pedMinWidth_;
-	value_type carMinWidth_;
+	value_type pedMaxWidth_;
+	value_type carMaxWidth_;
 	value_type clusterMaxDepth_;	
 	// marker array
 	visualization_msgs::MarkerArray markerArr_;
