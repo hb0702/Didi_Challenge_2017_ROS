@@ -17,15 +17,16 @@ const float MAX_VALUE = 1000.0f;
 const float GROUND_Z = -1.27f;
 const float GROUND_EPS = 0.1f;
 
-const float RESOLUTION = 0.3f;
+const float RESOLUTION = 0.4f;
 const float ROI_RADIUS = 21.0f;
 
-const int CLUSTER_POINT_COUNT_THRESHOLD = 95;
+const int CAR_POINT_COUNT_THRESHOLD = 88;
+const int PEDESTRIAN_POINT_COUNT_THRESHOLD = 48;
 
-const float PEDESTRIAN_MAX_WIDTH = 1.0f;
+const float PEDESTRIAN_MAX_WIDTH = 1.3f;
 const float PEDESTRIAN_MIN_DEPTH = 1.3f;
 const float PEDESTRIAN_MAX_DEPTH = 2.0f;
-const float CAR_MAX_WIDTH = 4.5f;
+const float CAR_MAX_WIDTH = 5.7f;
 const float CAR_MIN_DEPTH = 0.8f;
 const float CAR_MAX_DEPTH = 1.7f;
 
@@ -414,7 +415,8 @@ public:
 
 		// cluster filtering option
 		mode_ = mode;
-		clusterMinPointCount_ = CLUSTER_POINT_COUNT_THRESHOLD;
+		carMinPointCount_ = CAR_POINT_COUNT_THRESHOLD;
+		pedMinPointCount_ = PEDESTRIAN_POINT_COUNT_THRESHOLD;
 		pedMaxWidth_ = PEDESTRIAN_MAX_WIDTH;
 		pedMinZ_ = GROUND_Z + PEDESTRIAN_MIN_DEPTH;
 		pedMaxZ_ = GROUND_Z + PEDESTRIAN_MAX_DEPTH;
@@ -464,6 +466,8 @@ public:
 private:
 	void onPointsReceived(const sensor_msgs::PointCloud2::ConstPtr& msg)
 	{
+		ROS_INFO("Filter: start");
+
 		pcl::fromROSMsg(*msg, *cloud_);
 		_PointVector points = cloud_->points;
 		size_t pointCount = points.size();
@@ -471,6 +475,8 @@ private:
 		{
 			return;
 		}
+
+		ROS_INFO("Filter: point converted");
 
 		// mark bit vector - car and ground points
 		_BitVector pointFilterBV(pointCount, 0);
@@ -485,6 +491,8 @@ private:
 			markGround_simple(points, pointFilterBV);
 		}
 
+		ROS_INFO("Filter: marked ground");
+
 		// cluster
 		std::list<Cluster> clusters;
 		builder_->run(points, pointFilterBV, clusters);
@@ -493,10 +501,14 @@ private:
 		{
 			return;
 		}
+
+		ROS_INFO("Filter: clustered");
 		
 		// mark bit vector - bad  clusters
 		_BitVector clusterFilterBV(clusterCount, 0);
 		markBadCluster(clusters, clusterFilterBV);
+
+		ROS_INFO("Filter: marked bad clusters");
 
 		// publish clusters
 		publishMarkers(clusters, clusterFilterBV);
@@ -592,14 +604,6 @@ private:
 		_BitVector::iterator bit = filterBV.begin();
 		for (; cit != clusters.end(); ++cit, ++bit)
 		{
-			// min point count
-			if (cit->pointCount() < clusterMinPointCount_)
-			{
-				*bit = 1;
-				continue;
-			}
-
-			// cluster size
 			value_type top = cit->max().z;			
 			value_type maxWidth = std::max(cit->max().x - cit->min().x, cit->max().y - cit->min().y);
 			if (mode_ == "car")
@@ -608,7 +612,10 @@ private:
 					|| top < carMinZ_ || top > carMaxZ_)
 				{
 					*bit = 1;
-					continue;
+				}
+				else if (cit->pointCount() < carMinPointCount_)
+				{
+					*bit = 1;
 				}
 			}
 			else if (mode_ == "ped")
@@ -616,15 +623,39 @@ private:
 				if (maxWidth > pedMaxWidth_ || top < pedMinZ_ || top > pedMaxZ_)
 				{
 					*bit = 1;
-					continue;
+				}
+				else if (cit->pointCount() < pedMinPointCount_)
+				{
+					*bit = 1;
 				}
 			}
 			else if (mode_ == "car_ped")
 			{
-				if (maxWidth > carMaxWidth_ || top < carMinZ_ || top > pedMaxZ_)
+				if (maxWidth < pedMaxWidth_)
+				{
+					if (top < pedMinZ_ || top > pedMaxZ_)
+					{
+						*bit = 1;
+					}
+					else if (cit->pointCount() < pedMinPointCount_)
+					{
+						*bit = 1;
+					}
+				}
+				else if (maxWidth < carMaxWidth_)
+				{
+					if (top < carMinZ_ || top > carMaxZ_)
+					{
+						*bit = 1;
+					}
+					else if (cit->pointCount() < carMinPointCount_)
+					{
+						*bit = 1;
+					}
+				}
+				else
 				{
 					*bit = 1;
-					continue;
 				}
 			}
 		}
@@ -680,7 +711,8 @@ private:
 	Vector3 carMax_;
 	// cluster filtering option
 	std::string mode_;
-	int clusterMinPointCount_;
+	int carMinPointCount_;
+	int pedMinPointCount_;
 	value_type pedMaxWidth_;
 	value_type pedMinZ_;
 	value_type pedMaxZ_;
