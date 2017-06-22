@@ -6,21 +6,32 @@
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/filters/extract_indices.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 
-const int MAX_MARKER_COUNT = 1000;
+const int MAX_MARKER_COUNT = 100;
 const float MAX_VALUE = 1000.0f;
 
 const float GROUND_Z = -1.27f;
-const float GROUND_EPS = 0.2f;
-const float RESOLUTION = 0.4f;
-const float ROI_RADIUS = 22.0f;
-const int CLUSTER_POINT_COUNT_THRESHOLD = 14;
+const float GROUND_EPS = 0.1f;
+
+const float RESOLUTION = 0.3f;
+const float ROI_RADIUS = 21.0f;
+
+const int CLUSTER_POINT_COUNT_THRESHOLD = 95;
+
 const float PEDESTRIAN_MAX_WIDTH = 1.0f;
-const float CAR_MAX_WIDTH = 3.4f;
-const float CLUSTER_MAX_DEPTH = 2.0f;
+const float PEDESTRIAN_MIN_DEPTH = 1.3f;
+const float PEDESTRIAN_MAX_DEPTH = 2.0f;
+const float CAR_MAX_WIDTH = 4.5f;
+const float CAR_MIN_DEPTH = 0.8f;
+const float CAR_MAX_DEPTH = 1.7f;
+
+const bool USE_RANSAC = true;
+const bool PUBLISH_GROUND = false;
+const int RANSAC_MAX_ITERATIONS = 150;
 
 typedef pcl::PointXYZ _Point;
 typedef pcl::PointCloud<pcl::PointXYZ> _PointCloud;
@@ -118,7 +129,7 @@ public:
 			max_.z = point.z + 0.5 * cellSize_;
 		}
 
-		pointCount_ = hitCount;
+		pointCount_ += hitCount;
 	}
 
 	const Vector3& min() const
@@ -265,6 +276,7 @@ public:
 
 				seeds.push(Index(ix, iy));
 				cluster.add(cellPoint(ix, iy), hitCount(ix, iy));
+				bitmap_[ix][iy] = 1;
 
 				while (!seeds.empty())
 				{
@@ -276,16 +288,14 @@ public:
 						{
 							if ((ax == seed.x && ay == seed.y)
 							|| ax == -1 || ay == -1 || ax == iwidth_ || ay == iwidth_
-							|| bitmap_[ax][ay] == 1)
+							|| bitmap_[ax][ay] == 1 || hitCount(ax, ay) == 0)
 							{
 								continue;
 							}
 
-							if (hitCount(ax, ay) > 0)
-							{
-								seeds.push(Index(ax, ay));
-								cluster.add(cellPoint(ax, ay), hitCount(ax, ay));
-							}
+							seeds.push(Index(ax, ay));
+							cluster.add(cellPoint(ax, ay), hitCount(ax, ay));
+							bitmap_[ax][ay] = 1;
 						}
 					}
 				}
@@ -389,7 +399,7 @@ public:
 	Filter(ros::NodeHandle n, const std::string& mode)
 	{
     	subscriber_ = n.subscribe("/velodyne_points", 1, &Filter::onPointsReceived, this);
-    	publisher_ = n.advertise<visualization_msgs::MarkerArray>("/filter/boxes", 1);
+    	publisher_ = n.advertise<visualization_msgs::MarkerArray>("/filter/boxes", 1);    	
 		cloud_ = _PointCloud::Ptr(new _PointCloud());
 
 		// init cluster builder
@@ -406,8 +416,11 @@ public:
 		mode_ = mode;
 		clusterMinPointCount_ = CLUSTER_POINT_COUNT_THRESHOLD;
 		pedMaxWidth_ = PEDESTRIAN_MAX_WIDTH;
+		pedMinZ_ = GROUND_Z + PEDESTRIAN_MIN_DEPTH;
+		pedMaxZ_ = GROUND_Z + PEDESTRIAN_MAX_DEPTH;
 		carMaxWidth_ = CAR_MAX_WIDTH;
-		clusterMaxDepth_ = CLUSTER_MAX_DEPTH;
+		carMinZ_ = GROUND_Z + CAR_MIN_DEPTH;
+		carMaxZ_ = GROUND_Z + CAR_MAX_DEPTH;
 
 		// init markers
         for (int i = 0; i < MAX_MARKER_COUNT; i++)
@@ -434,6 +447,12 @@ public:
             markerArr_.markers.push_back(marker);
         }
 
+        if (PUBLISH_GROUND)
+    	{
+    		publisherGround_ = n.advertise<sensor_msgs::PointCloud2>("/filter/ground", 1);
+    		cloudGround_ = _PointCloud::Ptr(new _PointCloud());
+    	}
+
         ROS_INFO("Filter: initialized");
 	}
 
@@ -456,7 +475,15 @@ private:
 		// mark bit vector - car and ground points
 		_BitVector pointFilterBV(pointCount, 0);
 		markCar(points, pointFilterBV);
-		markGround_simple(points, pointFilterBV);
+
+		if (USE_RANSAC)
+		{
+			markGround_RANSAC(pointFilterBV);
+		}
+		else
+		{
+			markGround_simple(points, pointFilterBV);
+		}
 
 		// cluster
 		std::list<Cluster> clusters;
@@ -466,12 +493,12 @@ private:
 		{
 			return;
 		}
-		ROS_INFO("Filter: got %zd clusters", clusterCount);
-
+		
 		// mark bit vector - bad  clusters
 		_BitVector clusterFilterBV(clusterCount, 0);
 		markBadCluster(clusters, clusterFilterBV);
 
+		// publish clusters
 		publishMarkers(clusters, clusterFilterBV);
 	}
 
@@ -491,35 +518,50 @@ private:
 
 	void markGround_RANSAC(_BitVector& filterBV) const
 	{
-		pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
-		pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
+		pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+		pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
 		pcl::SACSegmentation<pcl::PointXYZ> seg;
-		seg.setOptimizeCoefficients (true);
-		seg.setModelType (pcl::SACMODEL_PLANE);
-		seg.setMethodType (pcl::SAC_RANSAC);
-		seg.setDistanceThreshold (0.02);
-		seg.setInputCloud (cloud_);
-		seg.segment (*inliers, *coefficients);
+		seg.setOptimizeCoefficients(true);
+		seg.setModelType(pcl::SACMODEL_PLANE);
+		seg.setMethodType(pcl::SAC_RANSAC);
+		seg.setInputCloud(cloud_);		
+		// variables
+		seg.setDistanceThreshold(GROUND_EPS);
+		seg.setAxis(Eigen::Vector3f(0.0f,0.0f,1.0f));
+		seg.setMaxIterations(RANSAC_MAX_ITERATIONS);
+		seg.segment(*inliers, *coefficients);
 
 		if (inliers->indices.size () == 0)
 		{
 			return;
 		}
 
-		// for ()
+		std::vector<int>::const_iterator it = inliers->indices.begin();
+		for (; it != inliers->indices.end(); ++it)
+		{
+			filterBV[*it] = 1;
+		}
 
-		// _BitVector::iterator bit = groundBV.begin();
-		// for (; pit != points.end(); ++pit, ++bit)
-		// {
-		// 	if (pit->z < maxBase_)
-		// 	{
-		// 		*bit = 1;
-		// 	}
-		// }
+		if (PUBLISH_GROUND)
+		{
+			pcl::ExtractIndices<_Point> extract;
+			extract.setInputCloud(cloud_);
+			extract.setIndices(inliers);
+			extract.setNegative(false);
+			extract.filter(*cloudGround_);
+			sensor_msgs::PointCloud2::Ptr msg(new sensor_msgs::PointCloud2());
+			pcl::toROSMsg(*cloudGround_, *msg);
+			publisherGround_.publish(msg);			
+		}
 	}
 
 	void markGround_simple(const _PointVector& points, _BitVector& filterBV) const
 	{
+		if (PUBLISH_GROUND)
+		{
+			cloudGround_->points.clear();
+		}
+
 		_PointVector::const_iterator pit = points.begin();
 		_BitVector::iterator bit = filterBV.begin();
 		for (; pit != points.end(); ++pit, ++bit)
@@ -527,7 +569,20 @@ private:
 			if (pit->z < maxGround_)
 			{
 				*bit = 1;
+
+				if (PUBLISH_GROUND)
+				{
+					cloudGround_->points.push_back(*pit);
+				}
 			}
+		}
+
+		if (PUBLISH_GROUND)
+		{
+			sensor_msgs::PointCloud2::Ptr msg(new sensor_msgs::PointCloud2());
+			pcl::toROSMsg(*cloudGround_, *msg);
+			msg->header.frame_id = "velodyne";
+			publisherGround_.publish(msg);
 		}
 	}
 
@@ -544,18 +599,13 @@ private:
 				continue;
 			}
 
-			// max depth
-			if (cit->max().z > clusterMaxDepth_)
-			{
-				*bit = 1;
-				continue;				
-			}
-
 			// cluster size
+			value_type top = cit->max().z;			
 			value_type maxWidth = std::max(cit->max().x - cit->min().x, cit->max().y - cit->min().y);
 			if (mode_ == "car")
 			{
-				if (maxWidth < pedMaxWidth_ || maxWidth > carMaxWidth_)
+				if (maxWidth < pedMaxWidth_ || maxWidth > carMaxWidth_
+					|| top < carMinZ_ || top > carMaxZ_)
 				{
 					*bit = 1;
 					continue;
@@ -563,7 +613,7 @@ private:
 			}
 			else if (mode_ == "ped")
 			{
-				if (maxWidth > pedMaxWidth_)
+				if (maxWidth > pedMaxWidth_ || top < pedMinZ_ || top > pedMaxZ_)
 				{
 					*bit = 1;
 					continue;
@@ -571,7 +621,7 @@ private:
 			}
 			else if (mode_ == "car_ped")
 			{
-				if (maxWidth > carMaxWidth_)
+				if (maxWidth > carMaxWidth_ || top < carMinZ_ || top > pedMaxZ_)
 				{
 					*bit = 1;
 					continue;
@@ -591,6 +641,9 @@ private:
 		{
 			if (*bit == 0)
 			{
+				ROS_INFO("Filter: points %d, depth %f, width %f, center %f %f %f", cit->pointCount(), cit->max().z, 
+					std::max(cit->max().x - cit->min().x, cit->max().y - cit->min().y),
+					cit->center().x, cit->center().y, cit->center().z);
 				Vector3 center = cit->center();
 				mit->pose.position.x = center.x;
 				mit->pose.position.y = center.y;
@@ -611,11 +664,12 @@ private:
 
         // publish markers
         publisher_.publish(markerArr_);
+        ROS_INFO("Filter: published %d markers", markerCnt);
 	}
 
 private:
 	ros::Subscriber subscriber_;
-	ros::Publisher publisher_;
+	ros::Publisher publisher_;	
 	_PointCloud::Ptr cloud_;
 	// cluster builder
 	ClusterBuilder* builder_;	
@@ -628,10 +682,16 @@ private:
 	std::string mode_;
 	int clusterMinPointCount_;
 	value_type pedMaxWidth_;
+	value_type pedMinZ_;
+	value_type pedMaxZ_;
 	value_type carMaxWidth_;
-	value_type clusterMaxDepth_;	
+	value_type carMinZ_;
+	value_type carMaxZ_;
 	// marker array
 	visualization_msgs::MarkerArray markerArr_;
+	// publish ground
+	ros::Publisher publisherGround_;
+	_PointCloud::Ptr cloudGround_;
 };
 #pragma endregion
 
