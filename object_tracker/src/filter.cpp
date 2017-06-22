@@ -181,10 +181,10 @@ public:
 
 		// init hit map
 		hitmap_ = new int*[iwidth_];
-		for (int ix = 0; ix < iwidth_; ++i)
+		for (int ix = 0; ix < iwidth_; ++ix)
 		{
 			hitmap_[ix] = new int[iwidth_];
-			for (int iy = 0; iy < h_; ++iy)
+			for (int iy = 0; iy < iwidth_; ++iy)
 			{
 				hitmap_[ix][iy] = 0;
 			}
@@ -192,7 +192,7 @@ public:
 
 		// init depth map
 		depthmap_ = new value_type*[iwidth_];
-		for (int ix = 0; ix < iwidth_; ++i)
+		for (int ix = 0; ix < iwidth_; ++ix)
 		{
 			depthmap_[ix] = new value_type[iwidth_];
 			for (int iy = 0; iy < iwidth_; ++iy)
@@ -203,10 +203,10 @@ public:
 
 		// init bit map
 		bitmap_ = new char*[iwidth_];
-		for (int ix = 0; ix < iwidth_; ++i)
+		for (int ix = 0; ix < iwidth_; ++ix)
 		{
 			bitmap_[ix] = new char[iwidth_];
-			for (int iy = 0; iy < h_; ++iy)
+			for (int iy = 0; iy < iwidth_; ++iy)
 			{
 				bitmap_[ix][iy] = 0;
 			}
@@ -216,28 +216,28 @@ public:
 	~ClusterBuilder()
 	{
 		// delete hit map
-		for (int ix = 0; ix < iwidth_; ++i)
+		for (int ix = 0; ix < iwidth_; ++ix)
 		{
 			delete[] hitmap_[ix];
 		}
 		delete[] hitmap_;
 
 		// delete depth map
-		for (int ix = 0; ix < iwidth_; ++i)
+		for (int ix = 0; ix < iwidth_; ++ix)
 		{
 			delete[] depthmap_[ix];
 		}
 		delete[] depthmap_;
 
 		// delete bit map
-		for (int ix = 0; ix < iwidth_; ++i)
+		for (int ix = 0; ix < iwidth_; ++ix)
 		{
 			delete[] bitmap_[ix];
 		}
 		delete[] bitmap_;
 	}
 
-	void run(const _PointVector& points, const _BitVector& filterBV, std::list<VoxelCluster>& clusters)
+	void run(const _PointVector& points, const _BitVector& filterBV, std::list<Cluster>& clusters)
 	{
 		clear();
 
@@ -251,7 +251,6 @@ public:
 			}
 		}
 
-		std::stack<Index> seeds;
 		for (int ix = 0; ix < iwidth_; ++ix)
 		{
 			for (int iy = 0; iy < iwidth_; ++iy)
@@ -261,10 +260,10 @@ public:
 					continue;
 				}
 
-				seeds.clear();
+				std::stack<Index> seeds;
 				Cluster cluster(cellSize_, baseZ_);
 
-				seed.push(Index(ix, iy));
+				seeds.push(Index(ix, iy));
 				cluster.add(cellPoint(ix, iy), hitCount(ix, iy));
 
 				while (!seeds.empty())
@@ -300,7 +299,7 @@ private:
 	void clear()
 	{
 		// reset hit map
-		for (int ix = 0; ix < iwidth_; ++i)
+		for (int ix = 0; ix < iwidth_; ++ix)
 		{
 			for (int iy = 0; iy < iwidth_; ++iy)
 			{
@@ -309,7 +308,7 @@ private:
 		}
 
 		// reset depth map
-		for (int ix = 0; ix < iwidth_; ++i)
+		for (int ix = 0; ix < iwidth_; ++ix)
 		{
 			for (int iy = 0; iy < iwidth_; ++iy)
 			{
@@ -318,7 +317,7 @@ private:
 		}
 
 		// reset bit map
-		for (int ix = 0; ix < iwidth_; ++i)
+		for (int ix = 0; ix < iwidth_; ++ix)
 		{
 			for (int iy = 0; iy < iwidth_; ++iy)
 			{
@@ -337,8 +336,8 @@ private:
 			return;
 		}
 
-		int x = (int)(((value_type)px - originx_) / cellSize_ + 0.5);
-		int y = (int)(((value_type)py - originy_) / cellSize_ + 0.5);
+		int x = (int)(((value_type)px - originX_) / cellSize_ + 0.5);
+		int y = (int)(((value_type)py - originY_) / cellSize_ + 0.5);
 
 		if (x < 0 || x >= iwidth_ || y < 0 || y >= iwidth_)
 		{
@@ -394,7 +393,7 @@ public:
 		cloud_ = _PointCloud::Ptr(new _PointCloud());
 
 		// init cluster builder
-		builder_ = new ClusterBuilder(0.0, 0.0, GROUND_Z, ROI_RADIUS, RESOLUTION)
+		builder_ = new ClusterBuilder(0.0, 0.0, GROUND_Z, ROI_RADIUS, RESOLUTION);
 		
 		// ground filtering option
 		maxGround_ = GROUND_Z + GROUND_EPS;
@@ -554,7 +553,7 @@ private:
 
 			// cluster size
 			value_type maxWidth = std::max(cit->max().x - cit->min().x, cit->max().y - cit->min().y);
-			if (mode == "car")
+			if (mode_ == "car")
 			{
 				if (maxWidth < pedMaxWidth_ || maxWidth > carMaxWidth_)
 				{
@@ -562,7 +561,7 @@ private:
 					continue;
 				}
 			}
-			if (mode == "ped")
+			else if (mode_ == "ped")
 			{
 				if (maxWidth > pedMaxWidth_)
 				{
@@ -570,7 +569,7 @@ private:
 					continue;
 				}
 			}
-			if (mode == "car_ped")
+			else if (mode_ == "car_ped")
 			{
 				if (maxWidth > carMaxWidth_)
 				{
@@ -581,7 +580,7 @@ private:
 		}
 	}
 
-	void publishMarkers(const std::list<Cluster>& clusters, const _BitVector& filterBV) const
+	void publishMarkers(const std::list<Cluster>& clusters, const _BitVector& filterBV)
 	{
 		// update markers
 		int markerCnt = 0;
@@ -593,9 +592,9 @@ private:
 			if (*bit == 0)
 			{
 				Vector3 center = cit->center();
-				mit->pose.position.x = center->x;
-				mit->pose.position.y = center->y;
-				mit->pose.position.z = center->z;
+				mit->pose.position.x = center.x;
+				mit->pose.position.y = center.y;
+				mit->pose.position.z = center.z;
 				mit->scale.x = cit->max().x - cit->min().x;
 				mit->scale.y = cit->max().y - cit->min().y;
 				mit->scale.z = cit->max().z - cit->min().z;

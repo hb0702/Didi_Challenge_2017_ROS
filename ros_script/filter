@@ -1,7 +1,7 @@
 #! /bin/bash
 OBJECT_MODE=""
 FIND_CAR=0
-FIND_PED=1
+FIND_PED=0
 
 # help function
 function usage()
@@ -26,7 +26,7 @@ while [ "$1" != "" ]; do
         --car)
             FIND_CAR=1
             ;;
-        --car)
+        --ped)
             FIND_PED=1
             ;;
         *)
@@ -39,14 +39,14 @@ while [ "$1" != "" ]; do
 done
 
 # find mode
-if [ $FIND_CAR == 0 ] && [ $FIND_PED == 0]; then
+if [ $FIND_CAR == 0 ] && [ $FIND_PED == 0 ]; then
 	echo "ERROR: specify object to find"
 	usage
 	exit 1
-elif [ $FIND_CAR == 1 ] && [ $FIND_PED == 0]; then
+elif [ $FIND_CAR == 1 ] && [ $FIND_PED == 0 ]; then
 	OBJECT_MODE="car"
 	echo "Find car"
-elif [ $FIND_CAR == 0 ] && [ $FIND_PED == 1]; then
+elif [ $FIND_CAR == 0 ] && [ $FIND_PED == 1 ]; then
 	OBJECT_MODE="ped"
 	echo "Find pedestrian"
 else
