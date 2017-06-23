@@ -11,7 +11,7 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 
-const int MAX_MARKER_COUNT = 100;
+const int MAX_MARKER_COUNT = 30;
 const float MAX_VALUE = 1000.0f;
 
 const float GROUND_Z = -1.27f;
