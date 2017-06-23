@@ -1,5 +1,4 @@
 #include <object_tracker/cluster.h>
-#include <pcl/point_types.h>
 #include <stack>
 
 const float MAX_VALUE = 1000.0f;

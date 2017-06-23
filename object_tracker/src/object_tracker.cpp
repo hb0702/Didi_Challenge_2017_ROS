@@ -21,7 +21,7 @@ const float RESOLUTION = 0.4f;
 const float ROI_RADIUS = 21.0f;
 
 const int CAR_POINT_COUNT_THRESHOLD = 88;
-const int PEDESTRIAN_POINT_COUNT_THRESHOLD = 48;
+const int PEDESTRIAN_POINT_COUNT_THRESHOLD = 42;
 
 const float PEDESTRIAN_MAX_WIDTH = 1.3f;
 const float PEDESTRIAN_MIN_DEPTH = 1.3f;
