@@ -65,14 +65,18 @@ include_directories(
 #add_dependencies(kf_localizer ???message_file_header_cpp??)
 
 # This will create executables of the nodes
-add_executable(bag_player src/bag_player.cpp)
-add_executable(tracker src/tracker.cpp)
-add_executable(filter src/filter.cpp)
+add_executable(bag_player
+  src/bag_player.cpp
+)
+add_executable(object_tracker
+  src/vector3.cpp
+  src/cluster.cpp
+  src/object_tracker.cpp
+)
 
 # This will link executables to the appropriate libraries
 target_link_libraries(bag_player ${catkin_LIBRARIES})
-target_link_libraries(tracker ${catkin_LIBRARIES})
-target_link_libraries(filter ${catkin_LIBRARIES})
+target_link_libraries(object_tracker ${catkin_LIBRARIES})
 
 # set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
 
@@ -86,9 +90,11 @@ target_link_libraries(filter ${catkin_LIBRARIES})
 # modules and global scripts declared therein get installed
 catkin_python_setup()
 
+# install headers
+install(DIRECTORY include/${PROJECT_NAME}/ DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION})
+
 # Install python scripts
-catkin_install_python(PROGRAMS scripts/detector.py scripts/model.py DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+# catkin_install_python(PROGRAMS scripts/detector.py scripts/model.py DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 # Install model
-install(FILES model/model.h5 DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
-
+# install(FILES model/model.h5 DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})

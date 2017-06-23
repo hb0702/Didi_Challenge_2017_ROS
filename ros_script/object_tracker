@@ -1,11 +1,7 @@
 #! /bin/bash
-
-# arguments
-USE_CPP_NODE=0
-
-#SCRIPT_PATH=$(readlink -f "$0")
-#SCRIPT_DIR=$(dirname "$SCRIPT")
-#sudo chmod 755 $scriptdir/../object_tracker/src/detector.py $scriptdir/../object_tracker/src/detector.py
+OBJECT_MODE=""
+FIND_CAR=0
+FIND_PED=0
 
 # help function
 function usage()
@@ -14,22 +10,24 @@ function usage()
     echo "  |Arguments|"
     echo "  -----------"
     echo "  Help: -h --help"
-    echo "  Use cpp node: --use_cpp_node"
+    echo "  Find car: --car"
+    echo "  Find pedestrian: --ped"
     echo ""
 }
 
 # parse argument
 while [ "$1" != "" ]; do
     PARAM="$1"
-    VALUE="$2"
     case $PARAM in
         -h | --help)
             usage
             exit
             ;;
-        --use_cpp_node)
-            USE_CPP_NODE=1
-            echo "use cpp node"
+        --car)
+            FIND_CAR=1
+            ;;
+        --ped)
+            FIND_PED=1
             ;;
         *)
             echo "ERROR: unknown parameter \"$PARAM\""
@@ -40,5 +38,21 @@ while [ "$1" != "" ]; do
     shift
 done
 
-echo -e "\e[92mStart object_tracker\e[0m"
-roslaunch object_tracker.launch use_cpp_node:=$USE_CPP_NODE
+# find mode
+if [ $FIND_CAR == 0 ] && [ $FIND_PED == 0 ]; then
+	echo "ERROR: specify object to find"
+	usage
+	exit 1
+elif [ $FIND_CAR == 1 ] && [ $FIND_PED == 0 ]; then
+	OBJECT_MODE="car"
+	echo "Find car"
+elif [ $FIND_CAR == 0 ] && [ $FIND_PED == 1 ]; then
+	OBJECT_MODE="ped"
+	echo "Find pedestrian"
+else
+	OBJECT_MODE="car_ped"
+	echo "Find car and pedestrian"
+fi
+
+echo -e "\e[92mStart filter\e[0m"
+roslaunch object_tracker.launch object_mode:=$OBJECT_MODE
