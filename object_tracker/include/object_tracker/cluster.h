@@ -14,7 +14,7 @@ public:
 
 	~Cluster();
 
-	void add(const Vector3& point, int hitCount);
+	void add(const Vector3& point, int hitCount, value_type intensity);
 
 	const Vector3& min() const;
 
@@ -24,12 +24,18 @@ public:
 
 	int pointCount() const;
 
+	value_type maxIntensity() const;
+
+	value_type area() const;
+
 private:
 	value_type cellSize_;
 	int pointCount_;
 	std::list<Vector3> points_;
+	value_type baseZ_;
 	Vector3 min_;
 	Vector3 max_;
+	value_type maxIntensity_;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,8 +51,30 @@ public:
 			x = _x;
 			y = _y;
 		}
+
 		int x;
 		int y;
+	};
+
+	struct Value
+	{
+		Value()
+		{
+			hit = 0;
+			depth = value_type(-1000.0);
+			intensity = value_type(0);
+		}
+
+		void clear(value_type baseZ)
+		{
+			hit = 0;
+			depth = baseZ;
+			intensity = value_type(0);
+		}
+
+		int hit;
+		value_type depth;
+		value_type intensity;
 	};
 
 public:
@@ -59,11 +87,11 @@ public:
 private:
 	void clear();
 
-	void hit(double px, double py, double pz);
-
-	Vector3 cellPoint(int ix, int iy) const;
+	void hit(const PCLPoint& point);
 
 	int hitCount(int ix, int iy) const;
+
+	void addPoint(int ix, int iy, Cluster& cluster);
 
 private:
 	value_type centerX_;
@@ -76,8 +104,7 @@ private:
 	int iwidth_;
 	int iradius_;
 	int iradius2_;
-	int** hitmap_;
-	value_type** depthmap_;
+	Value** valuemap_;
 	char** bitmap_;
 };
 

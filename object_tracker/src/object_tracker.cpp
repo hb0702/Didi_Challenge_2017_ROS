@@ -26,9 +26,11 @@ const int PEDESTRIAN_POINT_COUNT_THRESHOLD = 42;
 const float PEDESTRIAN_MAX_WIDTH = 1.3f;
 const float PEDESTRIAN_MIN_DEPTH = 1.3f;
 const float PEDESTRIAN_MAX_DEPTH = 2.0f;
-const float CAR_MAX_WIDTH = 5.7f;
-const float CAR_MIN_DEPTH = 0.8f;
+const float CAR_MAX_WIDTH = 6.5f;
+const float CAR_MIN_DEPTH = 0.3f;
 const float CAR_MAX_DEPTH = 1.7f;
+const float CAR_MIN_INTENSITY = 10.0f;
+const float CAR_MAX_AREA = 4.8f * 2.0f/*proportion*/;
 
 const bool USE_RANSAC = true;
 const bool PUBLISH_GROUND = false;
@@ -66,6 +68,8 @@ public:
 		carMaxWidth_ = CAR_MAX_WIDTH;
 		carMinZ_ = GROUND_Z + CAR_MIN_DEPTH;
 		carMaxZ_ = GROUND_Z + CAR_MAX_DEPTH;
+		carMaxArea_ = CAR_MAX_AREA;
+		carMinIntensity_ = CAR_MIN_INTENSITY;
 
 		// init markers
         for (int i = 0; i < MAX_MARKER_COUNT; i++)
@@ -109,17 +113,26 @@ public:
 private:
 	void onPointsReceived(const sensor_msgs::PointCloud2::ConstPtr& msg)
 	{
-		ROS_INFO("ObjectTracker: start");
+		// for (uint j=0; j < msg->height * msg->width; j++){
+  //           float x = msg->data[j * msg->point_step + msg->fields[0].offset];
+  //           float y = msg->data[j * msg->point_step + msg->fields[1].offset];
+  //           float z = msg->data[j * msg->point_step + msg->fields[2].offset];
+  //           float a = msg->data[j * msg->point_step + msg->fields[3].offset];
+  //           float b = msg->data[j * msg->point_step + msg->fields[4].offset];
+  //           float c = msg->data[j * msg->point_step + msg->fields[5].offset];
+  //           // Some other operations
+  //           ROS_INFO("point: %f %f %f %f %f %f", x, y, z, a, b, c);
+  //      	}
 
-		pcl::fromROSMsg(*msg, *cloud_);
+		sensor_msgs::PointCloud2 response = *msg;
+		response.fields[3].name = "intensity";
+		pcl::fromROSMsg(response, *cloud_);
 		PCLPointVector points = cloud_->points;
 		size_t pointCount = points.size();
 		if (pointCount == 0u)
 		{
 			return;
 		}
-
-		ROS_INFO("ObjectTracker: point converted");
 
 		// mark bit vector - car and ground points
 		BitVector pointFilterBV(pointCount, 0);
@@ -134,8 +147,6 @@ private:
 			markGround_simple(points, pointFilterBV);
 		}
 
-		ROS_INFO("ObjectTracker: marked ground");
-
 		// cluster
 		std::list<Cluster> clusters;
 		builder_->run(points, pointFilterBV, clusters);
@@ -145,13 +156,9 @@ private:
 			return;
 		}
 
-		ROS_INFO("ObjectTracker: clustered");
-		
 		// mark bit vector - bad  clusters
 		BitVector clusterFilterBV(clusterCount, 0);
 		markBadCluster(clusters, clusterFilterBV);
-
-		ROS_INFO("ObjectTracker: marked bad clusters");
 
 		// publish clusters
 		publishMarkers(clusters, clusterFilterBV);
@@ -175,7 +182,7 @@ private:
 	{
 		pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
 		pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
-		pcl::SACSegmentation<pcl::PointXYZ> seg;
+		pcl::SACSegmentation<PCLPoint> seg;
 		seg.setOptimizeCoefficients(true);
 		seg.setModelType(pcl::SACMODEL_PLANE);
 		seg.setMethodType(pcl::SAC_RANSAC);
@@ -206,7 +213,7 @@ private:
 			extract.filter(*cloudGround_);
 			sensor_msgs::PointCloud2::Ptr msg(new sensor_msgs::PointCloud2());
 			pcl::toROSMsg(*cloudGround_, *msg);
-			publisherGround_.publish(msg);			
+			publisherGround_.publish(msg);
 		}
 	}
 
@@ -260,6 +267,14 @@ private:
 				{
 					*bit = 1;
 				}
+				else if (cit->maxIntensity() < carMinIntensity_)
+				{
+					*bit = 1;
+				}
+				// else if (cit->area() > carMaxArea_)
+				// {
+				// 	*bit = 1;
+				// }
 			}
 			else if (mode_ == "ped")
 			{
@@ -274,6 +289,7 @@ private:
 			}
 			else if (mode_ == "car_ped")
 			{
+				// pedestrian
 				if (maxWidth < pedMaxWidth_)
 				{
 					if (top < pedMinZ_ || top > pedMaxZ_)
@@ -285,6 +301,7 @@ private:
 						*bit = 1;
 					}
 				}
+				// car
 				else if (maxWidth < carMaxWidth_)
 				{
 					if (top < carMinZ_ || top > carMaxZ_)
@@ -295,6 +312,14 @@ private:
 					{
 						*bit = 1;
 					}
+					else if (cit->maxIntensity() < carMinIntensity_)
+					{
+						*bit = 1;
+					}
+					// else if (cit->area() > carMaxArea_)
+					// {
+					// 	*bit = 1;
+					// }
 				}
 				else
 				{
@@ -315,9 +340,11 @@ private:
 		{
 			if (*bit == 0)
 			{
-				ROS_INFO("ObjectTracker: points %d, depth %f, width %f, center %f %f %f", cit->pointCount(), cit->max().z, 
+				ROS_INFO("ObjectTracker: points %d, depth %f, width %f, center %f %f %f, intensity %f", 
+					cit->pointCount(), cit->max().z - GROUND_Z, 
 					std::max(cit->max().x - cit->min().x, cit->max().y - cit->min().y),
-					cit->center().x, cit->center().y, cit->center().z);
+					cit->center().x, cit->center().y, cit->center().z,
+					cit->maxIntensity());
 				Vector3 center = cit->center();
 				mit->pose.position.x = center.x;
 				mit->pose.position.y = center.y;
@@ -362,6 +389,8 @@ private:
 	value_type carMaxWidth_;
 	value_type carMinZ_;
 	value_type carMaxZ_;
+	value_type carMinIntensity_;
+	value_type carMaxArea_;
 	// marker array
 	visualization_msgs::MarkerArray markerArr_;
 	// publish ground

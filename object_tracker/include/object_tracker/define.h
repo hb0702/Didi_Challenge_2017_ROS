@@ -9,8 +9,8 @@ namespace TeamKR
 
 typedef float value_type;
 
-typedef pcl::PointXYZ PCLPoint;
-typedef pcl::PointCloud<pcl::PointXYZ> PCLPointCloud;
+typedef pcl::PointXYZI PCLPoint;
+typedef pcl::PointCloud<PCLPoint> PCLPointCloud;
 typedef PCLPointCloud::VectorType PCLPointVector;
 typedef std::vector<char> BitVector;
 

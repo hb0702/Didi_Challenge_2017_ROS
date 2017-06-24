@@ -10,6 +10,7 @@ Cluster::Cluster(value_type resolution, value_type baseZ)
 {
 	cellSize_ = resolution;
 	pointCount_ = 0;
+	baseZ_ = baseZ;
 	min_.set(MAX_VALUE, MAX_VALUE, baseZ);
 	max_.set(-MAX_VALUE, -MAX_VALUE, baseZ);
 }
@@ -19,7 +20,7 @@ Cluster::~Cluster()
 
 }
 
-void Cluster::add(const Vector3& point, int hitCount)
+void Cluster::add(const Vector3& point, int hitCount, value_type intensity)
 {
 	points_.push_back(point);
 
@@ -49,6 +50,11 @@ void Cluster::add(const Vector3& point, int hitCount)
 	}
 
 	pointCount_ += hitCount;
+
+	if (maxIntensity_ < intensity)
+	{
+		maxIntensity_ = intensity;
+	}
 }
 
 const Vector3& Cluster::min() const
@@ -71,6 +77,64 @@ int Cluster::pointCount() const
 	return pointCount_;
 }
 
+value_type Cluster::maxIntensity() const
+{
+	return maxIntensity_;
+}
+
+value_type Cluster::area() const
+{
+	int w = (max_.x - min_.x) / cellSize_ + 1;
+	int h = (max_.y - min_.y) / cellSize_ + 1;
+
+	// init hit map
+	int** hitmap = new int*[w];
+	for (int ix = 0; ix < w; ++ix)
+	{
+		hitmap[ix] = new int[h];
+		for (int iy = 0; iy < h; ++iy)
+		{
+			hitmap[ix][iy] = 0;
+		}
+	}
+
+	// mark hit map
+	for (std::list<Vector3>::const_iterator it = points_.begin(); it != points_.end(); ++it)
+	{
+		int ix = (int)((it->x - min_.x) / cellSize_);
+		int iy = (int)((it->y - min_.y) / cellSize_);
+		hitmap[ix][iy] += 1;
+	}
+
+	printf("hitmap marked\n");
+
+	value_type ar = 0.0;
+
+	for (int ix = 0; ix < w; ++ix)
+	{
+		hitmap[ix] = new int[h];
+		for (int iy = 0; iy < h; ++iy)
+		{
+			if (hitmap[ix][iy] > 0)
+			{
+				ar += 1.0;
+			}
+		}
+	}
+
+	ar *= cellSize_ * cellSize_;
+
+	// delete hit map
+	for (int ix = 0; ix < w; ++ix)
+	{
+		delete[] hitmap[ix];
+	}
+	delete[] hitmap;
+
+	return ar;
+}
+
+
 /////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -86,25 +150,14 @@ ClusterBuilder::ClusterBuilder(value_type centerX, value_type centerY, value_typ
 	iradius2_ = iradius_ * iradius_;
 	iwidth_ = (int)(2 * radius / resolution + 0.5f);
 
-	// init hit map
-	hitmap_ = new int*[iwidth_];
+	// init value map
+	valuemap_ = new Value*[iwidth_];
 	for (int ix = 0; ix < iwidth_; ++ix)
 	{
-		hitmap_[ix] = new int[iwidth_];
+		valuemap_[ix] = new Value[iwidth_];
 		for (int iy = 0; iy < iwidth_; ++iy)
 		{
-			hitmap_[ix][iy] = 0;
-		}
-	}
-
-	// init depth map
-	depthmap_ = new value_type*[iwidth_];
-	for (int ix = 0; ix < iwidth_; ++ix)
-	{
-		depthmap_[ix] = new value_type[iwidth_];
-		for (int iy = 0; iy < iwidth_; ++iy)
-		{
-			depthmap_[ix][iy] = baseZ;
+			valuemap_[ix][iy].clear(baseZ);
 		}
 	}
 
@@ -122,19 +175,12 @@ ClusterBuilder::ClusterBuilder(value_type centerX, value_type centerY, value_typ
 
 ClusterBuilder::~ClusterBuilder()
 {
-	// delete hit map
+	// delete value map
 	for (int ix = 0; ix < iwidth_; ++ix)
 	{
-		delete[] hitmap_[ix];
+		delete[] valuemap_[ix];
 	}
-	delete[] hitmap_;
-
-	// delete depth map
-	for (int ix = 0; ix < iwidth_; ++ix)
-	{
-		delete[] depthmap_[ix];
-	}
-	delete[] depthmap_;
+	delete[] valuemap_;
 
 	// delete bit map
 	for (int ix = 0; ix < iwidth_; ++ix)
@@ -154,7 +200,7 @@ void ClusterBuilder::run(const PCLPointVector& points, const BitVector& filterBV
 	{
 		if (*bit == 0)
 		{
-			hit(pit->x, pit->y, pit->z);
+			hit(*pit);
 		}
 	}
 
@@ -171,7 +217,7 @@ void ClusterBuilder::run(const PCLPointVector& points, const BitVector& filterBV
 			Cluster cluster(cellSize_, baseZ_);
 
 			seeds.push(Index(ix, iy));
-			cluster.add(cellPoint(ix, iy), hitCount(ix, iy));
+			addPoint(ix, iy, cluster);
 			bitmap_[ix][iy] = 1;
 
 			while (!seeds.empty())
@@ -190,7 +236,7 @@ void ClusterBuilder::run(const PCLPointVector& points, const BitVector& filterBV
 						}
 
 						seeds.push(Index(ax, ay));
-						cluster.add(cellPoint(ax, ay), hitCount(ax, ay));
+						addPoint(ax, ay, cluster);
 						bitmap_[ax][ay] = 1;
 					}
 				}
@@ -203,21 +249,12 @@ void ClusterBuilder::run(const PCLPointVector& points, const BitVector& filterBV
 
 void ClusterBuilder::clear()
 {
-	// reset hit map
+	// reset value map
 	for (int ix = 0; ix < iwidth_; ++ix)
 	{
 		for (int iy = 0; iy < iwidth_; ++iy)
 		{
-			hitmap_[ix][iy] = 0;
-		}
-	}
-
-	// reset depth map
-	for (int ix = 0; ix < iwidth_; ++ix)
-	{
-		for (int iy = 0; iy < iwidth_; ++iy)
-		{
-			depthmap_[ix][iy] = baseZ_;
+			valuemap_[ix][iy].clear(baseZ_);
 		}
 	}
 
@@ -231,41 +268,52 @@ void ClusterBuilder::clear()
 	}
 }
 
-void ClusterBuilder::hit(double px, double py, double pz)
+void ClusterBuilder::hit(const PCLPoint& point)
 {
-	int rx = (int)(((value_type)px - centerX_) / cellSize_ + 0.5);
-	int ry = (int)(((value_type)py - centerY_) / cellSize_ + 0.5);
+	int rx = (int)(((value_type)point.x - centerX_) / cellSize_ + 0.5);
+	int ry = (int)(((value_type)point.y - centerY_) / cellSize_ + 0.5);
 
 	if (rx * rx + ry * ry > iradius2_)
 	{
 		return;
 	}
 
-	int x = (int)(((value_type)px - originX_) / cellSize_ + 0.5);
-	int y = (int)(((value_type)py - originY_) / cellSize_ + 0.5);
+	int x = (int)(((value_type)point.x - originX_) / cellSize_ + 0.5);
+	int y = (int)(((value_type)point.y - originY_) / cellSize_ + 0.5);
 
 	if (x < 0 || x >= iwidth_ || y < 0 || y >= iwidth_)
 	{
 		return;
 	}
 
-	hitmap_[x][y] += 1;
-	if (depthmap_[x][y] < pz)
-	{
-		depthmap_[x][y] = pz;
-	}
-}
+	Value& value = valuemap_[x][y];
 
-Vector3 ClusterBuilder::cellPoint(int ix, int iy) const
-{
-	return Vector3(originX_ + ((value_type)ix + 0.5) * cellSize_,
-				originY_ + ((value_type)iy + 0.5) * cellSize_,
-				depthmap_[ix][iy]);
+	value.hit += 1;
+
+	if (value.depth < point.z)
+	{
+		value.depth = point.z;
+	}
+
+	if (value.intensity < point.intensity)
+	{
+		value.intensity = point.intensity;
+	}
 }
 
 int ClusterBuilder::hitCount(int ix, int iy) const
 {
-	return hitmap_[ix][iy];
+	return valuemap_[ix][iy].hit;
+}
+
+void ClusterBuilder::addPoint(int ix, int iy, Cluster& cluster)
+{
+	Vector3 cellPoint = Vector3(originX_ + ((value_type)ix + 0.5) * cellSize_,
+								originY_ + ((value_type)iy + 0.5) * cellSize_,
+								valuemap_[ix][iy].depth);
+	int hitCount = valuemap_[ix][iy].hit;
+	value_type intensity = valuemap_[ix][iy].intensity;
+	cluster.add(cellPoint, hitCount, intensity);
 }
 
 }
