@@ -14,18 +14,18 @@
 
 const int MAX_MARKER_COUNT = 30;
 
-const float GROUND_Z = -1.27f;
+const float GROUND_Z = -1.4f;
 const float GROUND_EPS = 0.1f;
 
-const float RESOLUTION = 0.4f;
+const float RESOLUTION = 0.2f;
 const float ROI_RADIUS = 21.0f;
 
 const int CAR_POINT_COUNT_THRESHOLD = 88;
-const int PEDESTRIAN_POINT_COUNT_THRESHOLD = 42;
+const int PEDESTRIAN_POINT_COUNT_THRESHOLD = 48;
 
 const float PEDESTRIAN_MAX_WIDTH = 1.3f;
 const float PEDESTRIAN_MIN_DEPTH = 1.3f;
-const float PEDESTRIAN_MAX_DEPTH = 2.0f;
+const float PEDESTRIAN_MAX_DEPTH = 1.9f;
 const float CAR_MAX_WIDTH = 6.5f;
 const float CAR_MIN_DEPTH = 0.3f;
 const float CAR_MAX_DEPTH = 1.7f;
