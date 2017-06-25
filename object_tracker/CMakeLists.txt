@@ -4,7 +4,10 @@ project(object_tracker)
 ## Add support for C++11, supported in ROS Kinetic and newer
 # add_definitions(-std=c++11)
 
-find_package(catkin REQUIRED COMPONENTS
+find_package(catkin
+REQUIRED
+  cmake_modules 
+COMPONENTS
   roscpp
   rospy
   std_msgs
@@ -13,6 +16,8 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
   velodyne_msgs
 )
+
+find_package(Eigen REQUIRED)
 
 # Generate messages in the 'msg' folder
 # add_message_files(
@@ -47,12 +52,14 @@ catkin_package(
     pcl_ros
   DEPENDS
     system_lib
+    Eigen
 )
 
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${Boost_INCLUDE_DIRS}
+  ${Eigen_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -72,6 +79,7 @@ add_executable(object_tracker
   src/vector3.cpp
   src/cluster.cpp
   src/object_tracker.cpp
+  src/tracker.cpp
 )
 
 # This will link executables to the appropriate libraries

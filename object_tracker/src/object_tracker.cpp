@@ -29,7 +29,7 @@ const float PEDESTRIAN_MAX_DEPTH = 2.0f;
 const float CAR_MAX_WIDTH = 6.5f;
 const float CAR_MIN_DEPTH = 0.3f;
 const float CAR_MAX_DEPTH = 1.7f;
-const float CAR_MIN_INTENSITY = 10.0f;
+const float CAR_MIN_INTENSITY = 15.0f;
 const float CAR_MAX_AREA = 4.8f * 2.0f/*proportion*/;
 
 const bool USE_RANSAC = true;
@@ -156,12 +156,14 @@ private:
 			return;
 		}
 
-		// mark bit vector - bad  clusters
-		BitVector clusterFilterBV(clusterCount, 0);
-		markBadCluster(clusters, clusterFilterBV);
+		// filter clusters
+		std::list<Cluster> filteredClusters;
+		filterCluster(clusters, filteredClusters);
 
 		// publish clusters
-		publishMarkers(clusters, clusterFilterBV);
+		publishMarkers(filteredClusters);
+
+
 	}
 
 	void markCar(const PCLPointVector& points, BitVector& filterBV) const
@@ -248,11 +250,10 @@ private:
 		}
 	}
 
-	void markBadCluster(const std::list<Cluster>& clusters, BitVector& filterBV) const
+	void filterCluster(const std::list<Cluster>& input, std::list<Cluster>& output) const
 	{
-		std::list<Cluster>::const_iterator cit = clusters.begin();
-		BitVector::iterator bit = filterBV.begin();
-		for (; cit != clusters.end(); ++cit, ++bit)
+		std::list<Cluster>::const_iterator cit = input.begin();
+		for (; cit != input.end(); ++cit)
 		{
 			value_type top = cit->max().z;			
 			value_type maxWidth = std::max(cit->max().x - cit->min().x, cit->max().y - cit->min().y);
@@ -261,30 +262,30 @@ private:
 				if (maxWidth < pedMaxWidth_ || maxWidth > carMaxWidth_
 					|| top < carMinZ_ || top > carMaxZ_)
 				{
-					*bit = 1;
+					continue;
 				}
 				else if (cit->pointCount() < carMinPointCount_)
 				{
-					*bit = 1;
+					continue;
 				}
 				else if (cit->maxIntensity() < carMinIntensity_)
 				{
-					*bit = 1;
+					continue;
 				}
-				// else if (cit->area() > carMaxArea_)
-				// {
-				// 	*bit = 1;
-				// }
+				else if (cit->area() > carMaxArea_)
+				{
+					continue;
+				}
 			}
 			else if (mode_ == "ped")
 			{
 				if (maxWidth > pedMaxWidth_ || top < pedMinZ_ || top > pedMaxZ_)
 				{
-					*bit = 1;
+					continue;
 				}
 				else if (cit->pointCount() < pedMinPointCount_)
 				{
-					*bit = 1;
+					continue;
 				}
 			}
 			else if (mode_ == "car_ped")
@@ -294,11 +295,11 @@ private:
 				{
 					if (top < pedMinZ_ || top > pedMaxZ_)
 					{
-						*bit = 1;
+						continue;
 					}
 					else if (cit->pointCount() < pedMinPointCount_)
 					{
-						*bit = 1;
+						continue;
 					}
 				}
 				// car
@@ -306,57 +307,55 @@ private:
 				{
 					if (top < carMinZ_ || top > carMaxZ_)
 					{
-						*bit = 1;
+						continue;
 					}
 					else if (cit->pointCount() < carMinPointCount_)
 					{
-						*bit = 1;
+						continue;
 					}
 					else if (cit->maxIntensity() < carMinIntensity_)
 					{
-						*bit = 1;
+						continue;
 					}
-					// else if (cit->area() > carMaxArea_)
-					// {
-					// 	*bit = 1;
-					// }
+					else if (cit->area() > carMaxArea_)
+					{
+						continue;
+					}
 				}
 				else
 				{
-					*bit = 1;
+					continue;
 				}
 			}
+
+			output.push_back(*cit);
 		}
 	}
 
-	void publishMarkers(const std::list<Cluster>& clusters, const BitVector& filterBV)
+	void publishMarkers(const std::list<Cluster>& clusters)
 	{
 		// update markers
 		int markerCnt = 0;
 		std::list<Cluster>::const_iterator cit = clusters.begin();
-		BitVector::const_iterator bit = filterBV.begin();
 		std::vector<visualization_msgs::Marker>::iterator mit = markerArr_.markers.begin();
-		for (; cit != clusters.end(); ++cit, ++bit)
+		for (; cit != clusters.end(); ++cit)
 		{
-			if (*bit == 0)
-			{
-				ROS_INFO("ObjectTracker: points %d, depth %f, width %f, center %f %f %f, intensity %f", 
+			ROS_INFO("ObjectTracker: points %d, depth %f, width %f, center %f %f %f, intensity %f", 
 					cit->pointCount(), cit->max().z - GROUND_Z, 
 					std::max(cit->max().x - cit->min().x, cit->max().y - cit->min().y),
 					cit->center().x, cit->center().y, cit->center().z,
 					cit->maxIntensity());
-				Vector3 center = cit->center();
-				mit->pose.position.x = center.x;
-				mit->pose.position.y = center.y;
-				mit->pose.position.z = center.z;
-				mit->scale.x = cit->max().x - cit->min().x;
-				mit->scale.y = cit->max().y - cit->min().y;
-				mit->scale.z = cit->max().z - cit->min().z;
-				mit->color.a = 0.3;
+			Vector3 center = cit->center();
+			mit->pose.position.x = center.x;
+			mit->pose.position.y = center.y;
+			mit->pose.position.z = center.z;
+			mit->scale.x = cit->max().x - cit->min().x;
+			mit->scale.y = cit->max().y - cit->min().y;
+			mit->scale.z = cit->max().z - cit->min().z;
+			mit->color.a = 0.3;
 
-				++mit;
-				++markerCnt;
-			}
+			++mit;
+			++markerCnt;
 		}
 		for (; mit != markerArr_.markers.end(); ++mit)
         {
