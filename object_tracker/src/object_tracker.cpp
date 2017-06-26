@@ -2,6 +2,7 @@
 #include <object_tracker/cluster.h>
 
 #include <ros/ros.h>
+#include <std_msgs/Float32MultiArray.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <pcl/ModelCoefficients.h>
 #include <pcl/sample_consensus/method_types.h>
@@ -47,7 +48,8 @@ public:
 	ObjectTracker(ros::NodeHandle n, const std::string& mode)
 	{
     	subscriber_ = n.subscribe("/velodyne_points", 1, &ObjectTracker::onPointsReceived, this);
-    	publisher_ = n.advertise<visualization_msgs::MarkerArray>("/filter/boxes", 1);    	
+    	boxPublisher_ = n.advertise<std_msgs::Float32MultiArray>("/tracker/boxes", 1);
+    	markerPublisher_ = n.advertise<visualization_msgs::MarkerArray>("/tracker/markers", 1);
 		cloud_ = PCLPointCloud::Ptr(new PCLPointCloud());
 
 		// init cluster builder
@@ -102,7 +104,7 @@ public:
 
         if (PUBLISH_GROUND)
     	{
-    		publisherGround_ = n.advertise<sensor_msgs::PointCloud2>("/filter/ground", 1);
+    		publisherGround_ = n.advertise<sensor_msgs::PointCloud2>("/tracker/ground", 1);
     		cloudGround_ = PCLPointCloud::Ptr(new PCLPointCloud());
     	}
 
@@ -350,6 +352,42 @@ private:
 		}
 	}
 
+	void publishBoxes(const std::list<Cluster>& clusters)
+	{
+		float label = -1.0f;
+		if (mode_ == "car")
+		{
+			label = 0.0f;
+		}
+		else if (mode_ == "ped")
+		{
+			label = 1.0f;
+		}
+
+		int boxCnt = 0;
+		boxData_.data.clear();
+		std::list<Cluster>::const_iterator cit = clusters.begin();
+		for (; cit != clusters.end(); ++cit)
+		{
+
+			Vector3 center = cit->center();
+			boxData_.data.push_back(label); // label
+			boxData_.data.push_back(center.x); // center
+			boxData_.data.push_back(center.y); // center
+			boxData_.data.push_back(center.z); // center
+			boxData_.data.push_back(cit->max().x - cit->min().x); // size
+			boxData_.data.push_back(cit->max().y - cit->min().y); // size
+			boxData_.data.push_back(cit->max().z - cit->min().z); // size
+			boxData_.data.push_back(0.0); // rotation
+
+			++boxCnt;
+		}
+
+        // publish boxes
+        boxPublisher_.publish(markerArr_);
+        ROS_INFO("ObjectTracker: published %d boxes", boxCnt);
+	}
+
 	void publishMarkers(const std::list<Cluster>& clusters)
 	{
 		// update markers
@@ -383,13 +421,14 @@ private:
         }
 
         // publish markers
-        publisher_.publish(markerArr_);
+        markerPublisher_.publish(markerArr_);
         ROS_INFO("ObjectTracker: published %d markers", markerCnt);
 	}
 
 private:
 	ros::Subscriber subscriber_;
-	ros::Publisher publisher_;	
+	ros::Publisher boxPublisher_;
+	ros::Publisher markerPublisher_;	
 	PCLPointCloud::Ptr cloud_;
 	// cluster builder
 	ClusterBuilder* builder_;	
@@ -412,6 +451,8 @@ private:
 	value_type carMaxTop_;
 	value_type carMinIntensity_;
 	value_type carMaxArea_;
+	// box data
+	std_msgs::Float32MultiArray boxData_;
 	// marker array
 	visualization_msgs::MarkerArray markerArr_;
 	// publish ground
