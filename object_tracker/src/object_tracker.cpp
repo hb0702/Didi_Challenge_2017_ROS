@@ -384,7 +384,7 @@ private:
 		}
 
         // publish boxes
-        boxPublisher_.publish(markerArr_);
+        boxPublisher_.publish(boxData_);
         ROS_INFO("ObjectTracker: published %d boxes", boxCnt);
 	}
 
