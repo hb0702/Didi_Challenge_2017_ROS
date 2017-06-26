@@ -11,8 +11,8 @@ Cluster::Cluster(value_type resolution, value_type baseZ)
 	cellSize_ = resolution;
 	pointCount_ = 0;
 	baseZ_ = baseZ;
-	min_.set(MAX_VALUE, MAX_VALUE, baseZ);
-	max_.set(-MAX_VALUE, -MAX_VALUE, baseZ);
+	min_.set(MAX_VALUE, MAX_VALUE, MAX_VALUE);
+	max_.set(-MAX_VALUE, -MAX_VALUE, -MAX_VALUE);
 }
 
 Cluster::~Cluster()
@@ -162,7 +162,7 @@ ClusterBuilder::ClusterBuilder(value_type centerX, value_type centerY, value_typ
 		valuemap_[ix] = new Value[iwidth_];
 		for (int iy = 0; iy < iwidth_; ++iy)
 		{
-			valuemap_[ix][iy].clear(baseZ);
+			valuemap_[ix][iy].clear();
 		}
 	}
 
@@ -259,7 +259,7 @@ void ClusterBuilder::clear()
 	{
 		for (int iy = 0; iy < iwidth_; ++iy)
 		{
-			valuemap_[ix][iy].clear(baseZ_);
+			valuemap_[ix][iy].clear();
 		}
 	}
 
@@ -295,9 +295,9 @@ void ClusterBuilder::hit(const PCLPoint& point)
 
 	value.hit += 1;
 
-	if (value.depth < point.z)
+	if (value.top < point.z)
 	{
-		value.depth = point.z;
+		value.top = point.z;
 	}
 
 	if (value.base > point.z)

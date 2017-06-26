@@ -14,24 +14,25 @@
 
 const int MAX_MARKER_COUNT = 30;
 
-const float GROUND_Z = -1.3f;
+const float GROUND_Z = -1.4f;
 const float GROUND_EPS = 0.1f;
 
-const float RESOLUTION = 0.2f;
+const float RESOLUTION = 0.1f;
 const float ROI_RADIUS = 21.0f;
 
 const int CAR_POINT_COUNT_THRESHOLD = 88;
 const int PEDESTRIAN_POINT_COUNT_THRESHOLD = 48;
 
-const float PEDESTRIAN_MAX_WIDTH = 1.3f;
-const float PEDESTRIAN_MIN_DEPTH = 1.3f;
-const float PEDESTRIAN_MAX_DEPTH = 1.9f;
-const float PEDESTRIAN_MAX_BASE = 0.5f;
+const float PEDESTRIAN_MAX_WIDTH = 1.2f;
+const float PEDESTRIAN_MIN_DEPTH = 1.2f;
+const float PEDESTRIAN_MAX_DEPTH = 2.0f;
+const float PEDESTRIAN_MAX_BASE = GROUND_Z + 0.9f;
+const float PEDESTRIAN_MAX_AREA = 0.5f;
 const float CAR_MAX_WIDTH = 6.5f;
 const float CAR_MIN_DEPTH = 0.3f;
 const float CAR_MAX_DEPTH = 1.7f;
 const float CAR_MIN_INTENSITY = 15.0f;
-const float CAR_MAX_AREA = 4.8f * 2.0f/*proportion*/;
+const float CAR_MAX_AREA = 4.8f * 2.0f;
 
 const bool USE_RANSAC = true;
 const bool PUBLISH_GROUND = false;
@@ -64,12 +65,13 @@ public:
 		carMinPointCount_ = CAR_POINT_COUNT_THRESHOLD;
 		pedMinPointCount_ = PEDESTRIAN_POINT_COUNT_THRESHOLD;
 		pedMaxWidth_ = PEDESTRIAN_MAX_WIDTH;
-		pedMinDepth_ = PEDESTRIAN_MIN_DEPTH;
-		pedMaxDepth_ = PEDESTRIAN_MAX_DEPTH;
+		pedMinTop_ = GROUND_Z + PEDESTRIAN_MIN_DEPTH;
+		pedMaxTop_ = GROUND_Z + PEDESTRIAN_MAX_DEPTH;
 		pedMaxBase_ = PEDESTRIAN_MAX_BASE;
+		pedMaxArea_ = PEDESTRIAN_MAX_AREA;
 		carMaxWidth_ = CAR_MAX_WIDTH;
-		carMinDepth_ = CAR_MIN_DEPTH;
-		carMaxDepth_ = CAR_MAX_DEPTH;
+		carMinTop_ = GROUND_Z + CAR_MIN_DEPTH;
+		carMaxTop_ = GROUND_Z + CAR_MAX_DEPTH;
 		carMaxArea_ = CAR_MAX_AREA;
 		carMinIntensity_ = CAR_MIN_INTENSITY;
 
@@ -264,7 +266,7 @@ private:
 			if (mode_ == "car")
 			{
 				if (maxWidth < pedMaxWidth_ || maxWidth > carMaxWidth_
-					|| depth < carMinDepth_ || depth > carMaxDepth_)
+					|| top < carMinTop_ || top > carMaxTop_)
 				{
 					continue;
 				}
@@ -283,7 +285,7 @@ private:
 			}
 			else if (mode_ == "ped")
 			{
-				if (maxWidth > pedMaxWidth_ || depth < pedMinDepth_ || depth > pedMaxDepth_)
+				if (maxWidth > pedMaxWidth_ || top < pedMinTop_ || top > pedMaxTop_)
 				{
 					continue;
 				}
@@ -295,50 +297,54 @@ private:
 				{
 					continue;
 				}
-			}
-			else if (mode_ == "car_ped")
-			{
-				// pedestrian
-				if (maxWidth < pedMaxWidth_)
-				{
-					if (depth < pedMinDepth_ || depth > pedMaxDepth_)
-					{
-						continue;
-					}
-					else if (base > pedMaxBase_)
-					{
-						continue;
-					}
-					else if (cit->pointCount() < pedMinPointCount_)
-					{
-						continue;
-					}
-				}
-				// car
-				else if (maxWidth < carMaxWidth_)
-				{
-					if (depth < carMinDepth_ || depth > carMaxDepth_)
-					{
-						continue;
-					}
-					else if (cit->pointCount() < carMinPointCount_)
-					{
-						continue;
-					}
-					else if (cit->maxIntensity() < carMinIntensity_)
-					{
-						continue;
-					}
-					else if (cit->area() > carMaxArea_)
-					{
-						continue;
-					}
-				}
-				else
+				else if (cit->area() > pedMaxArea_)??? why is larger value pass this test?
 				{
 					continue;
 				}
 			}
+			// else if (mode_ == "car_ped")
+			// {
+			// 	// pedestrian
+			// 	if (maxWidth < pedMaxWidth_)
+			// 	{
+			// 		if (top < pedMinDepth_ || top > pedMaxDepth_)
+			// 		{
+			// 			continue;
+			// 		}
+			// 		else if (base > pedMaxBase_)
+			// 		{
+			// 			continue;
+			// 		}
+			// 		else if (cit->pointCount() < pedMinPointCount_)
+			// 		{
+			// 			continue;
+			// 		}
+			// 	}
+			// 	// car
+			// 	else if (maxWidth < carMaxWidth_)
+			// 	{
+			// 		if (depth < carMinDepth_ || depth > carMaxDepth_)
+			// 		{
+			// 			continue;
+			// 		}
+			// 		else if (cit->pointCount() < carMinPointCount_)
+			// 		{
+			// 			continue;
+			// 		}
+			// 		else if (cit->maxIntensity() < carMinIntensity_)
+			// 		{
+			// 			continue;
+			// 		}
+			// 		else if (cit->area() > carMaxArea_)
+			// 		{
+			// 			continue;
+			// 		}
+			// 	}
+			// 	else
+			// 	{
+			// 		continue;
+			// 	}
+			// }
 
 			output.push_back(*cit);
 		}
@@ -352,11 +358,13 @@ private:
 		std::vector<visualization_msgs::Marker>::iterator mit = markerArr_.markers.begin();
 		for (; cit != clusters.end(); ++cit)
 		{
-			ROS_INFO("ObjectTracker: points %d, depth %f, width %f, center %f %f %f, intensity %f", 
-					cit->pointCount(), cit->max().z - GROUND_Z, 
+			ROS_INFO("ObjectTracker: points %d, depth %f, width %f, center %f %f %f, intensity %f, top %f, base %f, area %f",
+					cit->pointCount(), cit->max().z - cit->min().z, 
 					std::max(cit->max().x - cit->min().x, cit->max().y - cit->min().y),
 					cit->center().x, cit->center().y, cit->center().z,
-					cit->maxIntensity());
+					cit->maxIntensity(),
+					cit->max().z, cit->min().z,
+					cit->area());
 			Vector3 center = cit->center();
 			mit->pose.position.x = center.x;
 			mit->pose.position.y = center.y;
@@ -395,12 +403,13 @@ private:
 	int carMinPointCount_;
 	int pedMinPointCount_;
 	value_type pedMaxWidth_;
-	value_type pedMinDepth_;
-	value_type pedMaxDepth_;
+	value_type pedMinTop_;
+	value_type pedMaxTop_;
 	value_type pedMaxBase_;
+	value_type pedMaxArea_;
 	value_type carMaxWidth_;
-	value_type carMinDepth_;
-	value_type carMaxDepth_;
+	value_type carMinTop_;
+	value_type carMaxTop_;
 	value_type carMinIntensity_;
 	value_type carMaxArea_;
 	// marker array
