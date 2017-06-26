@@ -14,7 +14,7 @@ public:
 
 	~Cluster();
 
-	void add(const Vector3& point, int hitCount, value_type intensity);
+	void add(const Vector3& point, int hitCount, value_type intensity, value_type minZ);
 
 	const Vector3& min() const;
 
@@ -61,19 +61,22 @@ public:
 		Value()
 		{
 			hit = 0;
-			depth = value_type(-1000.0);
+			top = value_type(-1000.0);
+			base = value_type(1000.0);
 			intensity = value_type(0);
 		}
 
-		void clear(value_type baseZ)
+		void clear()
 		{
 			hit = 0;
-			depth = baseZ;
+			top = value_type(-1000.0);
+			base = value_type(1000.0);
 			intensity = value_type(0);
 		}
 
 		int hit;
-		value_type depth;
+		value_type top;
+		value_type base;
 		value_type intensity;
 	};
 

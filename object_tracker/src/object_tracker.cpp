@@ -14,7 +14,7 @@
 
 const int MAX_MARKER_COUNT = 30;
 
-const float GROUND_Z = -1.4f;
+const float GROUND_Z = -1.3f;
 const float GROUND_EPS = 0.1f;
 
 const float RESOLUTION = 0.2f;
@@ -26,6 +26,7 @@ const int PEDESTRIAN_POINT_COUNT_THRESHOLD = 48;
 const float PEDESTRIAN_MAX_WIDTH = 1.3f;
 const float PEDESTRIAN_MIN_DEPTH = 1.3f;
 const float PEDESTRIAN_MAX_DEPTH = 1.9f;
+const float PEDESTRIAN_MAX_BASE = 0.5f;
 const float CAR_MAX_WIDTH = 6.5f;
 const float CAR_MIN_DEPTH = 0.3f;
 const float CAR_MAX_DEPTH = 1.7f;
@@ -63,11 +64,12 @@ public:
 		carMinPointCount_ = CAR_POINT_COUNT_THRESHOLD;
 		pedMinPointCount_ = PEDESTRIAN_POINT_COUNT_THRESHOLD;
 		pedMaxWidth_ = PEDESTRIAN_MAX_WIDTH;
-		pedMinZ_ = GROUND_Z + PEDESTRIAN_MIN_DEPTH;
-		pedMaxZ_ = GROUND_Z + PEDESTRIAN_MAX_DEPTH;
+		pedMinDepth_ = PEDESTRIAN_MIN_DEPTH;
+		pedMaxDepth_ = PEDESTRIAN_MAX_DEPTH;
+		pedMaxBase_ = PEDESTRIAN_MAX_BASE;
 		carMaxWidth_ = CAR_MAX_WIDTH;
-		carMinZ_ = GROUND_Z + CAR_MIN_DEPTH;
-		carMaxZ_ = GROUND_Z + CAR_MAX_DEPTH;
+		carMinDepth_ = CAR_MIN_DEPTH;
+		carMaxDepth_ = CAR_MAX_DEPTH;
 		carMaxArea_ = CAR_MAX_AREA;
 		carMinIntensity_ = CAR_MIN_INTENSITY;
 
@@ -255,12 +257,14 @@ private:
 		std::list<Cluster>::const_iterator cit = input.begin();
 		for (; cit != input.end(); ++cit)
 		{
-			value_type top = cit->max().z;			
+			value_type top = cit->max().z;
+			value_type base = cit->min().z;
+			value_type depth = top - base;
 			value_type maxWidth = std::max(cit->max().x - cit->min().x, cit->max().y - cit->min().y);
 			if (mode_ == "car")
 			{
 				if (maxWidth < pedMaxWidth_ || maxWidth > carMaxWidth_
-					|| top < carMinZ_ || top > carMaxZ_)
+					|| depth < carMinDepth_ || depth > carMaxDepth_)
 				{
 					continue;
 				}
@@ -279,7 +283,11 @@ private:
 			}
 			else if (mode_ == "ped")
 			{
-				if (maxWidth > pedMaxWidth_ || top < pedMinZ_ || top > pedMaxZ_)
+				if (maxWidth > pedMaxWidth_ || depth < pedMinDepth_ || depth > pedMaxDepth_)
+				{
+					continue;
+				}
+				else if (base > pedMaxBase_)
 				{
 					continue;
 				}
@@ -293,7 +301,11 @@ private:
 				// pedestrian
 				if (maxWidth < pedMaxWidth_)
 				{
-					if (top < pedMinZ_ || top > pedMaxZ_)
+					if (depth < pedMinDepth_ || depth > pedMaxDepth_)
+					{
+						continue;
+					}
+					else if (base > pedMaxBase_)
 					{
 						continue;
 					}
@@ -305,7 +317,7 @@ private:
 				// car
 				else if (maxWidth < carMaxWidth_)
 				{
-					if (top < carMinZ_ || top > carMaxZ_)
+					if (depth < carMinDepth_ || depth > carMaxDepth_)
 					{
 						continue;
 					}
@@ -383,11 +395,12 @@ private:
 	int carMinPointCount_;
 	int pedMinPointCount_;
 	value_type pedMaxWidth_;
-	value_type pedMinZ_;
-	value_type pedMaxZ_;
+	value_type pedMinDepth_;
+	value_type pedMaxDepth_;
+	value_type pedMaxBase_;
 	value_type carMaxWidth_;
-	value_type carMinZ_;
-	value_type carMaxZ_;
+	value_type carMinDepth_;
+	value_type carMaxDepth_;
 	value_type carMinIntensity_;
 	value_type carMaxArea_;
 	// marker array

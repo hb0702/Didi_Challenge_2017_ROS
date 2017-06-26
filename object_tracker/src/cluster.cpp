@@ -20,7 +20,7 @@ Cluster::~Cluster()
 
 }
 
-void Cluster::add(const Vector3& point, int hitCount, value_type intensity)
+void Cluster::add(const Vector3& point, int hitCount, value_type intensity, value_type minZ)
 {
 	points_.push_back(point);
 
@@ -54,6 +54,11 @@ void Cluster::add(const Vector3& point, int hitCount, value_type intensity)
 	if (maxIntensity_ < intensity)
 	{
 		maxIntensity_ = intensity;
+	}
+
+	if (min_.z > point.z - 0.5 * cellSize_)
+	{
+		min_.z = point.z - 0.5 * cellSize_;
 	}
 }
 
@@ -295,6 +300,11 @@ void ClusterBuilder::hit(const PCLPoint& point)
 		value.depth = point.z;
 	}
 
+	if (value.base > point.z)
+	{
+		value.base = point.z;
+	}
+
 	if (value.intensity < point.intensity)
 	{
 		value.intensity = point.intensity;
@@ -308,12 +318,14 @@ int ClusterBuilder::hitCount(int ix, int iy) const
 
 void ClusterBuilder::addPoint(int ix, int iy, Cluster& cluster)
 {
+	const Value& value = valuemap_[ix][iy];
 	Vector3 cellPoint = Vector3(originX_ + ((value_type)ix + 0.5) * cellSize_,
 								originY_ + ((value_type)iy + 0.5) * cellSize_,
-								valuemap_[ix][iy].depth);
-	int hitCount = valuemap_[ix][iy].hit;
-	value_type intensity = valuemap_[ix][iy].intensity;
-	cluster.add(cellPoint, hitCount, intensity);
+								value.top);
+	int hitCount = value.hit;
+	value_type intensity = value.intensity;
+	value_type base = value.base;
+	cluster.add(cellPoint, hitCount, intensity, base);
 }
 
 }
