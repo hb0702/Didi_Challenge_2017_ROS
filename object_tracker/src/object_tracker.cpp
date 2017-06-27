@@ -14,39 +14,6 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 
-const int MAX_MARKER_COUNT = 30;
-
-const float GROUND_Z = -1.4f;
-const float GROUND_EPS = 0.1f;
-
-const float RESOLUTION = 0.15f;
-const float ROI_RADIUS = 21.0f;
-
-const int PEDESTRIAN_LABEL = 0;
-const int PEDESTRIAN_MIN_POINT_COUNT = 30;
-const float PEDESTRIAN_MAX_WIDTH = 1.2f;
-const float PEDESTRIAN_MIN_DEPTH = 1.2f;
-const float PEDESTRIAN_MAX_DEPTH = 2.0f;
-const float PEDESTRIAN_MAX_BASE = GROUND_Z + 0.9f;
-const float PEDESTRIAN_MAX_AREA = 0.45f;
-const float PEDESTRIAN_SPEED_LIMIT = 8.33f; // 30 km/h in m/s
-const float PEDESTRIAN_FILTER_INIT_TIME = 1.0f; // sec
-const float PEDESTRIAN_FILTER_RESET_TIME = 1.0f; // sec
-
-const int CAR_LABEL = 1;
-const int CAR_MIN_POINT_COUNT = 88;
-const float CAR_MAX_WIDTH = 6.5f;
-const float CAR_MIN_DEPTH = 0.3f;
-const float CAR_MAX_DEPTH = 1.7f;
-const float CAR_MAX_AREA = 4.8f * 2.0f;
-const float CAR_SPEED_LIMIT = 27.78f; // 100 km/h in m/s
-const float CAR_FILTER_INIT_TIME = 1.0f; // sec
-const float CAR_FILTER_RESET_TIME = 1.0f; // sec
-
-const bool USE_RANSAC = true;
-const bool PUBLISH_GROUND = false;
-const int RANSAC_MAX_ITERATIONS = 150;
-
 namespace TeamKR
 {
 
@@ -57,29 +24,19 @@ public:
 	{
     	subscriber_ = n.subscribe("/velodyne_points", 1, &ObjectTracker::onPointsReceived, this);
     	boxPublisher_ = n.advertise<std_msgs::Float32MultiArray>("/tracker/boxes", 1);
-    	markerPublisher_ = n.advertise<visualization_msgs::MarkerArray>("/tracker/markers", 1);
+    	detectedMarkerPublisher_ = n.advertise<visualization_msgs::MarkerArray>("/tracker/markers/detect", 1);
+    	predictedMarkerPublisher_ = n.advertise<visualization_msgs::MarkerArray>("/tracker/markers/predict", 1);
 		cloud_ = PCLPointCloud::Ptr(new PCLPointCloud());
 
 		// init cluster builder
-		builder_ = new ClusterBuilder(0.0, 0.0, GROUND_Z, ROI_RADIUS, RESOLUTION);
+		builder_ = new ClusterBuilder(0.0, 0.0);
 
 		// init point filter
 		float speedLimit = -1.0f;
 		float initTime = -1.0f;
 		float resetTime = -1.0f;
-		if (mode == "car")
-		{
-			speedLimit = CAR_SPEED_LIMIT;
-			initTime = CAR_FILTER_INIT_TIME;
-			resetTime = CAR_FILTER_RESET_TIME;
-		}
-		else if (mode == "ped")
-		{
-			speedLimit = PEDESTRIAN_SPEED_LIMIT;
-			initTime = PEDESTRIAN_FILTER_INIT_TIME;
-			resetTime = PEDESTRIAN_FILTER_RESET_TIME;
-		}		
-		filter_ = new Filter(speedLimit, initTime, resetTime);
+			
+		filter_ = new Filter(mode);
 		
 		// ground filtering option
 		maxGround_ = GROUND_Z + GROUND_EPS;
@@ -113,7 +70,30 @@ public:
             marker.color.r = 1.0;
             marker.color.g = 0.0;
             marker.color.b = 0.0;
-            markerArr_.markers.push_back(marker);
+            detectedMarkers_.markers.push_back(marker);
+        }
+        for (int i = 0; i < 1; i++)
+        {
+        	visualization_msgs::Marker marker;
+            marker.id = i;
+            marker.header.frame_id = "velodyne";
+            marker.type = marker.CUBE;
+            marker.action = marker.ADD;
+            marker.pose.position.x = 0.0;
+            marker.pose.position.y = 0.0;
+            marker.pose.position.z = 0.0;
+            marker.pose.orientation.x = 0.0;
+            marker.pose.orientation.y = 0.0;
+            marker.pose.orientation.z = 0.0;
+            marker.pose.orientation.w = 1.0;
+            marker.scale.x = 0.2;
+            marker.scale.y = 0.2;
+            marker.scale.z = 0.2;
+            marker.color.a = 0.0;
+            marker.color.r = 0.0;
+            marker.color.g = 0.0;
+            marker.color.b = 1.0;
+            predictedMarkers_.markers.push_back(marker);
         }
 
         if (PUBLISH_GROUND)
@@ -160,7 +140,7 @@ private:
 		BitVector pointFilterBV(pointCount, 0);
 		markCar(points, pointFilterBV);
 
-		if (USE_RANSAC)
+		if (USE_RANSAC_GROUND_FITTING)
 		{
 			markGround_RANSAC(pointFilterBV);
 		}
@@ -178,34 +158,27 @@ private:
 			return;
 		}
 
-		// filter clusters
-		std::list<Cluster> filtered;
+		// filter by size
+		std::vector<Cluster>& sizeFiltered;
+		filter_->filterBySize(input, sizeFiltered);
 
-		???
-		std::list<Cluster> sizeFiltered;
-		filterClusterBySize(clusters, sizeFiltered);
-		filterClusterByPosition(sizeFiltered, filtered);
+		// filter by velocity
+		int tsSec = msg.header.stamp.sec;
+		int tsNsec = msg.header.stamp.nsec;
 
-		if (filtered.empty())
+		std::list<Box> boxes;
+		filter_->filterByVelocity(sizeFiltered, tsSec, tsNsec, boxes);
+
+		if (PUBLISH_MARKERS)
 		{
-			if (!sizeFiltered.empty)
-			{
-				filterClusterByCount(clusters, filtered);
-			}
-			else if (!clusters.empty())
-			{
-				filterClusterByCount(clusters, filtered);
-			}
-			else
-			{
-				filtered.
-			}			
+			// publish detected clusters
+			publishMarkers(sizeFiltered, boxes);
 		}
 
-		// publish clusters
-		publishMarkers(filteredClusters);
-
-
+		if (!boxes.empty())
+		{
+			publishBoxes(boxes);
+		}
 	}
 
 	void markCar(const PCLPointVector& points, BitVector& filterBV) const
@@ -292,98 +265,12 @@ private:
 		}
 	}
 
-	void filterClusterBySize(const std::list<Cluster>& input, std::list<Cluster>& output) const
-	{
-		std::list<Cluster>::const_iterator cit = input.begin();
-		for (; cit != input.end(); ++cit)
-		{
-			value_type top = cit->max()(2);
-			value_type base = cit->min()(2);
-			value_type depth = top - base;
-			value_type maxWidth = std::max(cit->max()(0) - cit->min()(0), cit->max()(1) - cit->min()(1));
-			if (mode_ == "car")
-			{
-				if (maxWidth < PEDESTRIAN_MAX_WIDTH || maxWidth > CAR_MAX_WIDTH
-					|| top < GROUND_Z + CAR_MIN_DEPTH || top > GROUND_Z + CAR_MAX_DEPTH)
-				{
-					continue;
-				}
-				else if (cit->pointCount() < CAR_MIN_POINT_COUNT)
-				{
-					continue;
-				}
-				else if (cit->area() > CAR_MAX_AREA)
-				{
-					continue;
-				}
-			}
-			else if (mode_ == "ped")
-			{
-				if (maxWidth > PEDESTRIAN_MAX_WIDTH 
-					|| top < GROUND_Z + PEDESTRIAN_MIN_DEPTH || top > GROUND_Z + PEDESTRIAN_MAX_DEPTH)
-				{
-					continue;
-				}
-				else if (base > PEDESTRIAN_MAX_BASE)
-				{
-					continue;
-				}
-				else if (cit->pointCount() < PEDESTRIAN_MIN_POINT_COUNT)
-				{
-					continue;
-				}
-				else if (cit->area() > PEDESTRIAN_MAX_AREA)
-				{
-					continue;
-				}
-			}
-
-			output.push_back(*cit);
-		}
-	}
-
-	void publishBoxes(const std::list<Cluster>& clusters)
-	{
-		float label = -1.0f;
-		if (mode_ == "car")
-		{
-			label = (float)CAR_LABEL;
-		}
-		else if (mode_ == "ped")
-		{
-			label = (float)PEDESTRIAN_LABEL;
-		}
-
-		int boxCnt = 0;
-		boxData_.data.clear();
-		std::list<Cluster>::const_iterator cit = clusters.begin();
-		for (; cit != clusters.end(); ++cit)
-		{
-
-			Vector3 center = cit->center();
-			boxData_.data.push_back(label); // label
-			boxData_.data.push_back(center(0)); // center
-			boxData_.data.push_back(center(1)); // center
-			boxData_.data.push_back(center(2)); // center
-			boxData_.data.push_back(cit->max()(0) - cit->min()(0)); // size
-			boxData_.data.push_back(cit->max()(1) - cit->min()(1)); // size
-			boxData_.data.push_back(cit->max()(2) - cit->min()(2)); // size
-			boxData_.data.push_back(0.0); // rotation
-
-			++boxCnt;
-		}
-
-        // publish boxes
-        boxPublisher_.publish(boxData_);
-        ROS_INFO("ObjectTracker: published %d boxes", boxCnt);
-	}
-
-	void publishMarkers(const std::list<Cluster>& clusters)
+	void publishMarkers(const std::list<Cluster>& clusters, const std::list<Box>& boxes)
 	{
 		// update markers
 		int markerCnt = 0;
 		std::list<Cluster>::const_iterator cit = clusters.begin();
-		std::vector<visualization_msgs::Marker>::iterator mit = markerArr_.markers.begin();
+		std::vector<visualization_msgs::Marker>::iterator mit = detectedMarkers_.markers.begin();
 		for (; cit != clusters.end(); ++cit)
 		{
 			ROS_INFO("ObjectTracker: points %d, depth %f, width %f, center %f %f %f, intensity %f, top %f, base %f, area %f",
@@ -410,18 +297,57 @@ private:
             mit->color.a = 0.0;
         }
 
+        mit = predictedMarkers_???
+
         // publish markers
         markerPublisher_.publish(markerArr_);
         ROS_INFO("ObjectTracker: published %d markers", markerCnt);
 	}
 
+	void publishBoxes(const std::list<Box>& boxes)
+	{
+		float label = -1.0f;
+		if (mode_ == "car")
+		{
+			label = (float)CAR_LABEL;
+		}
+		else if (mode_ == "ped")
+		{
+			label = (float)PEDESTRIAN_LABEL;
+		}
+
+		int boxCnt = 0;
+		boxData_.data.clear();
+		std::list<Box>::const_iterator bit = boxes.begin();
+		for (; bit != clusters.end(); ++cit)
+		{
+			Vector3 center = cit->center();
+			boxData_.data.push_back(label); // label
+			boxData_.data.push_back(center(0)); // center
+			boxData_.data.push_back(center(1)); // center
+			boxData_.data.push_back(center(2)); // center
+			boxData_.data.push_back(cit->max()(0) - cit->min()(0)); // size
+			boxData_.data.push_back(cit->max()(1) - cit->min()(1)); // size
+			boxData_.data.push_back(cit->max()(2) - cit->min()(2)); // size
+			boxData_.data.push_back(0.0); // rotation
+
+			++boxCnt;
+		}
+
+        // publish boxes
+        boxPublisher_.publish(boxData_);
+        ROS_INFO("ObjectTracker: published %d boxes", boxCnt);
+	}
+
 private:
 	ros::Subscriber subscriber_;
 	ros::Publisher boxPublisher_;
-	ros::Publisher markerPublisher_;	
+	ros::Publisher detectedMarkerPublisher_;
+	ros::Publisher predictedMarkerPublisher_;
 	PCLPointCloud::Ptr cloud_;
 	// cluster builder
 	ClusterBuilder* builder_;
+	// velocity fiilter
 	Filter* filter_;	
 	// ground filtering option
 	value_type maxGround_;
@@ -433,7 +359,8 @@ private:
 	// box data
 	std_msgs::Float32MultiArray boxData_;
 	// marker array
-	visualization_msgs::MarkerArray markerArr_;
+	visualization_msgs::MarkerArray detectedMarkers_;
+	visualization_msgs::MarkerArray predictedMarkers_;
 	// publish ground
 	ros::Publisher publisherGround_;
 	PCLPointCloud::Ptr cloudGround_;

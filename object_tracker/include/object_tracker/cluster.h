@@ -85,7 +85,7 @@ public:
 	};
 
 public:
-	ClusterBuilder(value_type centerX, value_type centerY, value_type baseZ, value_type radius, value_type resolution);
+	ClusterBuilder(value_type centerX, value_type centerY);
 
 	~ClusterBuilder();
 

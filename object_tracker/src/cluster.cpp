@@ -157,17 +157,17 @@ value_type Cluster::area() const
 /////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-ClusterBuilder::ClusterBuilder(value_type centerX, value_type centerY, value_type baseZ, value_type radius, value_type resolution)
+ClusterBuilder::ClusterBuilder(value_type centerX, value_type centerY)
 {
 	centerX_ = centerX;
 	centerY_ = centerY;
-	originX_ = centerX - radius;
-	originY_ = centerY - radius;
-	baseZ_ = baseZ;
-	cellSize_ = resolution;
-	iradius_ = (int)(radius / resolution + 0.5f);
+	originX_ = centerX - ROI_RADIUS;
+	originY_ = centerY - ROI_RADIUS;
+	baseZ_ = GROUND_Z;
+	cellSize_ = RESOLUTION;
+	iradius_ = (int)(ROI_RADIUS / resolution + 0.5f);
 	iradius2_ = iradius_ * iradius_;
-	iwidth_ = (int)(2 * radius / resolution + 0.5f);
+	iwidth_ = (int)(2 * ROI_RADIUS / resolution + 0.5f);
 
 	// init value map
 	valuemap_ = new Value*[iwidth_];
