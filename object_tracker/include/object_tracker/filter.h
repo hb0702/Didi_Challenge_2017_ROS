@@ -1,6 +1,7 @@
 #pragma once
 
 #include <object_tracker/define.h>
+#include <object_tracker/cluster.h>
 
 namespace TeamKR
 {
@@ -37,7 +38,7 @@ public:
 	value_type rx;
 	value_type ry;
 	value_type rz;
-}
+};
 
 class Filter
 {
@@ -46,18 +47,18 @@ public:
 
 	~Filter();
 
-	void filterBySize(const std::vector<Cluster>& input, std::vector<Cluster>& output) const;
+	void filterBySize(const std::list<Cluster*>& input, std::list<Cluster*>& output) const;
 
-	void filterByVelocity(const std::vector<Cluster>& input, int tsSec, int tsNsec, std::vector<Box>& output);
+	void filterByVelocity(const std::list<Cluster*>& input, int tsSec, int tsNsec, std::list<Box*>& output);
 
 private:
 	double toTime(int tsSec, int tsNsec) const;
 
 	Vector2 velocity(const Vector2& pos, double time) const;
 
-	Box toBox(const Cluster& cluster) const;
+	Box* toBox(Cluster* cluster) const;
 
-	const Cluster& selectCluster(const std::vector<Cluster>& input);
+	Cluster* selectCluster(const std::list<Cluster*>& input);
 
 private:
 	std::string mode_;

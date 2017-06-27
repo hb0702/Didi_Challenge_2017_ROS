@@ -33,15 +33,15 @@ Filter::~Filter()
 
 }
 
-void Filter::filterBySize(const std::vector<Cluster>& input, std::vector<Cluster>& output) const
+void Filter::filterBySize(const std::list<Cluster*>& input, std::list<Cluster*>& output) const
 {
-	std::list<Cluster>::const_iterator cit = input.begin();
+	std::list<Cluster*>::const_iterator cit = input.begin();
 	for (; cit != input.end(); ++cit)
 	{
-		value_type top = cit->max()(2);
-		value_type base = cit->min()(2);
+		value_type top = (*cit)->max()(2);
+		value_type base = (*cit)->min()(2);
 		value_type depth = top - base;
-		value_type maxWidth = std::max(cit->max()(0) - cit->min()(0), cit->max()(1) - cit->min()(1));
+		value_type maxWidth = std::max((*cit)->max()(0) - (*cit)->min()(0), (*cit)->max()(1) - (*cit)->min()(1));
 		if (mode_ == "car")
 		{
 			if (maxWidth < PEDESTRIAN_MAX_WIDTH || maxWidth > CAR_MAX_WIDTH
@@ -49,11 +49,11 @@ void Filter::filterBySize(const std::vector<Cluster>& input, std::vector<Cluster
 			{
 				continue;
 			}
-			else if (cit->pointCount() < CAR_MIN_POINT_COUNT)
+			else if ((*cit)->pointCount() < CAR_MIN_POINT_COUNT)
 			{
 				continue;
 			}
-			else if (cit->area() > CAR_MAX_AREA)
+			else if ((*cit)->area() > CAR_MAX_AREA)
 			{
 				continue;
 			}
@@ -69,11 +69,11 @@ void Filter::filterBySize(const std::vector<Cluster>& input, std::vector<Cluster
 			{
 				continue;
 			}
-			else if (cit->pointCount() < PEDESTRIAN_MIN_POINT_COUNT)
+			else if ((*cit)->pointCount() < PEDESTRIAN_MIN_POINT_COUNT)
 			{
 				continue;
 			}
-			else if (cit->area() > PEDESTRIAN_MAX_AREA)
+			else if ((*cit)->area() > PEDESTRIAN_MAX_AREA)
 			{
 				continue;
 			}
@@ -83,7 +83,7 @@ void Filter::filterBySize(const std::vector<Cluster>& input, std::vector<Cluster
 	}
 }
 
-void Filter::filterByVelocity(const std::vector<Cluster>& input, int tsSec, int tsNsec, std::vector<Box>& output)
+void Filter::filterByVelocity(const std::list<Cluster*>& input, int tsSec, int tsNsec, std::list<Box*>& output)
 {
 	double time = toTime(tsSec, tsNsec);
 
@@ -96,10 +96,10 @@ void Filter::filterByVelocity(const std::vector<Cluster>& input, int tsSec, int 
 		}
 		else
 		{
-			Box box(prevBox_);
+			Box* box = new Box(prevBox_);
 			Vector2 dp = prevVel_ * (time - prevTime_);
-			box.px += dp(0);
-			box.py += dp(1);
+			box->px += dp(0);
+			box->py += dp(1);
 			output.push_back(box);
 		}
 	}
@@ -111,7 +111,7 @@ void Filter::filterByVelocity(const std::vector<Cluster>& input, int tsSec, int 
 			if (initStartTime_ < 0)
 			{
 				// save current info
-				Cluster current;
+				Cluster* current;
 				if (input.size() == 1)
 				{
 					current = input.front();
@@ -120,12 +120,12 @@ void Filter::filterByVelocity(const std::vector<Cluster>& input, int tsSec, int 
 				{
 					current = selectCluster(input);
 				}
-				Box box = toBox(current);
+				Box* box = toBox(current);
 				output.push_back(box);
 
 				prevVel_ << 0, 0;
 				prevTime_ = time;
-				prevBox_ = box;
+				prevBox_ = *box;
 
 				initStartTime_ = time;
 			}
@@ -133,10 +133,10 @@ void Filter::filterByVelocity(const std::vector<Cluster>& input, int tsSec, int 
 			else
 			{
 				// filter with velocity
-				std::vector<Cluster> found;
-				for (std::vector<Cluster>::const_iterator it = input.begin(); it != input.end(); ++it)
+				std::list<Cluster*> found;
+				for (std::list<Cluster*>::const_iterator it = input.begin(); it != input.end(); ++it)
 				{
-					Vector2 point(it->center().x, it->center().y);
+					Vector2 point((*it)->center()(0), (*it)->center()(1));
 					Vector2 vel = velocity(point, time);
 					if (vel.norm() < speedLimit_)
 					{
@@ -156,17 +156,17 @@ void Filter::filterByVelocity(const std::vector<Cluster>& input, int tsSec, int 
 					}
 					else
 					{
-						Box box(prevBox_);
+						Box* box = new Box(prevBox_);
 						Vector2 dp = prevVel_ * (time - prevTime_);
-						box.px += dp(0);
-						box.py += dp(1);
+						box->px += dp(0);
+						box->py += dp(1);
 						output.push_back(box);
 					}
 				}
 				else // found
 				{
 					// save current info
-					Cluster current;
+					Cluster* current;
 					if (found.size() == 1)
 					{
 						current = found.front();
@@ -175,14 +175,15 @@ void Filter::filterByVelocity(const std::vector<Cluster>& input, int tsSec, int 
 					{
 						current = selectCluster(found);
 					}
-					Box box = toBox(current);
+
+					Box* box = toBox(current);
 					output.push_back(box);
 
-					Vector2 point(current.center().x, current.center().y);
+					Vector2 point(box->px, box->py);
 					Vector2 vel = velocity(point, time);
 					prevVel_ = vel;
 					prevTime_ = time;
-					prevBox_ = box;
+					prevBox_ = *box;
 
 					// if init condition satisfied 
 					if (time - initStartTime_ > initTime_)
@@ -197,10 +198,10 @@ void Filter::filterByVelocity(const std::vector<Cluster>& input, int tsSec, int 
 		else // initialized and valid
 		{
 			// filter with velocity
-			std::vector<Cluster> found;
-			for (std::vector<Cluster>::const_iterator it = input.begin(); it != input.end(); ++it)
+			std::list<Cluster*> found;
+			for (std::list<Cluster*>::const_iterator it = input.begin(); it != input.end(); ++it)
 			{
-				Vector2 point(it->center().x, it->center().y);
+				Vector2 point((*it)->center()(0), (*it)->center()(1));
 				Vector2 vel = velocity(point, time);
 				if (vel.norm() < speedLimit_)
 				{
@@ -211,31 +212,16 @@ void Filter::filterByVelocity(const std::vector<Cluster>& input, int tsSec, int 
 			if (found.empty())
 			{
 				// predict
-				Box box(prevBox_);
+				Box* box = new Box(prevBox_);
 				Vector2 dp = prevVel_ * (time - prevTime_);
-				box.px += dp(0);
-				box.py += dp(1);
+				box->px += dp(0);
+				box->py += dp(1);
 				output.push_back(box);
-
-				// start reset timer
-				if (resetStartTime_ < 0)
-				{
-					resetStartTime_ = time;
-				}
-				// reset timer running
-				else if (time - resetStartTime_ > resetTime_)
-				{
-					valid_ = false;
-					resetStartTime_ = -1;
-					// start initialization
-					std::vector<Cluster> dummy;
-					filterByVelocity(input, tsSec, tsNsec, dummy);
-				}
 			}
 			else // found
 			{
 				// save current info
-				Cluster current;
+				Cluster* current;
 				if (found.size() == 1)
 				{
 					current = found.front();
@@ -244,16 +230,32 @@ void Filter::filterByVelocity(const std::vector<Cluster>& input, int tsSec, int 
 				{
 					current = selectCluster(found);
 				}
-				Box box = toBox(current);
+				Box* box = toBox(current);
 				output.push_back(box);
-				Vector2 point(current.center().x, current.center().y);
+				Vector2 point(box->px, box->py);
 				Vector2 vel = velocity(point, time);
 				prevVel_ = vel;
 				prevTime_ = time;
-				prevBox_ = box;
+				prevBox_ = *box;
+			}
 
-				initStartTime_ = -1;
+			// start reset timer
+			if (resetStartTime_ < 0)
+			{
+				resetStartTime_ = time;
+			}
+			// reset timer running
+			else if (time - resetStartTime_ > resetTime_)
+			{
+				valid_ = false;
 				resetStartTime_ = -1;
+				// start initialization
+				std::list<Box*> dummy;
+				filterByVelocity(input, tsSec, tsNsec, dummy);
+				for (std::list<Box*>::iterator it = dummy.begin(); it != dummy.end(); ++it)
+				{
+					delete *it;
+				}
 			}
 		}
 	}
@@ -266,37 +268,38 @@ double Filter::toTime(int tsSec, int tsNsec) const
 
 Vector2 Filter::velocity(const Vector2& pos, double time) const
 {
-	Vector2 prevPos(prevCluster_.center().x, prevCluster_.center().y);
+	Vector2 prevPos(prevBox_.px, prevBox_.py);
 	return (pos - prevPos) / (time - prevTime_);
 }
 
-Box Filter::toBox(const Cluster& cluster) const
+Box* Filter::toBox(Cluster* cluster) const
 {
-	Box box;
-	Vector3 center = cluster.center();
-	Vector3 min = cluster.min();
-	Vector3 max = cluster.max();
+	Box* box = new Box();
+	Vector3 center = cluster->center();
+	Vector3 min = cluster->min();
+	Vector3 max = cluster->max();
 
-	box.px = center(0);
-	box.py = center(1);
-	box.pz = center(2);
-	box.width = max(0) - min(0);
-	box.height = max(1) - min(1);
-	box.depth = max(2) - min(2);
+	box->px = center(0);
+	box->py = center(1);
+	box->pz = center(2);
+	box->width = max(0) - min(0);
+	box->height = max(1) - min(1);
+	box->depth = max(2) - min(2);
 }
 
-const Cluster& Filter::selectCluster(const std::vector<Cluster>& input)
+Cluster* Filter::selectCluster(const std::list<Cluster*>& input)
 {
-	std::vector<Cluster>::const_iterator it = input.begin();
-	Cluster cluster = *it;
+	std::list<Cluster*>::const_iterator it = input.begin();
+	Cluster* cluster = *it;
 	++it;
 	for (; it != input.end(); ++it)
 	{
-		if (it->pointCount() > cluster.pointCount())
+		if ((*it)->pointCount() > cluster->pointCount())
 		{
 			cluster = *it;
 		}
 	}
+	printf("!!!!selected point %d\n", cluster->pointCount());
 
 	return cluster;
 }

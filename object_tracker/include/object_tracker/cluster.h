@@ -8,16 +8,12 @@ namespace TeamKR
 
 class Cluster
 {
-protected:
-	Cluster();
-
 public:
-	Cluster(value_type resolution, value_type baseZ);
-
-	Cluster(const Cluster& rhs);
+	Cluster();
 
 	~Cluster();
 
+public:
 	void add(const Vector3& point, int hitCount, value_type intensity, value_type minZ);
 
 	const Vector3& min() const;
@@ -33,10 +29,8 @@ public:
 	value_type area() const;
 
 private:
-	value_type cellSize_;
 	int pointCount_;
 	std::list<Vector3> points_;
-	value_type baseZ_;
 	Vector3 min_;
 	Vector3 max_;
 	value_type maxIntensity_;
@@ -89,7 +83,7 @@ public:
 
 	~ClusterBuilder();
 
-	void run(const PCLPointVector& points, const BitVector& filterBV, std::list<Cluster>& clusters);
+	void run(const PCLPointVector& points, const BitVector& filterBV, std::list<Cluster*>& clusters);
 
 private:
 	void clear();
@@ -98,7 +92,9 @@ private:
 
 	int hitCount(int ix, int iy) const;
 
-	void addPoint(int ix, int iy, Cluster& cluster);
+	value_type top(int ix, int iy) const;
+
+	void addPoint(int ix, int iy, Cluster* cluster);
 
 private:
 	value_type centerX_;
@@ -107,7 +103,6 @@ private:
 	value_type originY_;
 	value_type baseZ_;
 	value_type radius_;
-	value_type cellSize_;
 	int iwidth_;
 	int iradius_;
 	int iradius2_;

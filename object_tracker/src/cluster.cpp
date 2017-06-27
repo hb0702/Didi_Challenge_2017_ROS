@@ -8,26 +8,10 @@ namespace TeamKR
 
 Cluster::Cluster()
 {
-}
-
-Cluster::Cluster(value_type resolution, value_type baseZ)
-{
-	cellSize_ = resolution;
 	pointCount_ = 0;
-	baseZ_ = baseZ;
 	min_ << MAX_VALUE, MAX_VALUE, MAX_VALUE;
 	max_ << -MAX_VALUE, -MAX_VALUE, -MAX_VALUE;
-}
-
-Cluster::Cluster(const Cluster& rhs)
-{
-	cellSize_ = rhs.cellSize_;
-	pointCount_ = rhs.pointCount_;
-	points_ = rhs.points_;
-	baseZ_ = rhs.baseZ_;
-	min_ = rhs.min_;
-	max_ = rhs.max_;
-	maxIntensity_ = rhs.maxIntensity_;
+	maxIntensity_ = 0;
 }
 
 Cluster::~Cluster()
@@ -39,29 +23,29 @@ void Cluster::add(const Vector3& point, int hitCount, value_type intensity, valu
 {
 	points_.push_back(point);
 
-	if (min_(0) > point(0) - 0.5 * cellSize_)
+	if (min_(0) > point(0) - 0.5 * RESOLUTION)
 	{
-		min_(0) = point(0) - 0.5 * cellSize_;
+		min_(0) = point(0) - 0.5 * RESOLUTION;
 	}
-	if (min_(1) > point(1) - 0.5 * cellSize_)
+	if (min_(1) > point(1) - 0.5 * RESOLUTION)
 	{
-		min_(1) = point(1) - 0.5 * cellSize_;
+		min_(1) = point(1) - 0.5 * RESOLUTION;
 	}
-	if (min_(2) > point(2) - 0.5 * cellSize_)
+	if (min_(2) > point(2) - 0.5 * RESOLUTION)
 	{
-		min_(2) = point(2) - 0.5 * cellSize_;
+		min_(2) = point(2) - 0.5 * RESOLUTION;
 	}
-	if (max_(0) < point(0) + 0.5 * cellSize_)
+	if (max_(0) < point(0) + 0.5 * RESOLUTION)
 	{
-		max_(0) = point(0) + 0.5 * cellSize_;
+		max_(0) = point(0) + 0.5 * RESOLUTION;
 	}
-	if (max_(1) < point(1) + 0.5 * cellSize_)
+	if (max_(1) < point(1) + 0.5 * RESOLUTION)
 	{
-		max_(1) = point(1) + 0.5 * cellSize_;
+		max_(1) = point(1) + 0.5 * RESOLUTION;
 	}
-	if (max_(2) < point(2) + 0.5 * cellSize_)
+	if (max_(2) < point(2) + 0.5 * RESOLUTION)
 	{
-		max_(2) = point(2) + 0.5 * cellSize_;
+		max_(2) = point(2) + 0.5 * RESOLUTION;
 	}
 
 	pointCount_ += hitCount;
@@ -71,9 +55,9 @@ void Cluster::add(const Vector3& point, int hitCount, value_type intensity, valu
 		maxIntensity_ = intensity;
 	}
 
-	if (min_(2) > point(2) - 0.5 * cellSize_)
+	if (min_(2) > minZ - 0.5 * RESOLUTION)
 	{
-		min_(2) = point(2) - 0.5 * cellSize_;
+		min_(2) = minZ - 0.5 * RESOLUTION;
 	}
 }
 
@@ -104,7 +88,7 @@ value_type Cluster::maxIntensity() const
 
 value_type Cluster::area() const
 {
-	value_type r = cellSize_;
+	value_type r = RESOLUTION;
 
 	int w = (max_(0) - min_(0)) / r + 1;
 	int h = (max_(1) - min_(1)) / r + 1;
@@ -164,10 +148,9 @@ ClusterBuilder::ClusterBuilder(value_type centerX, value_type centerY)
 	originX_ = centerX - ROI_RADIUS;
 	originY_ = centerY - ROI_RADIUS;
 	baseZ_ = GROUND_Z;
-	cellSize_ = RESOLUTION;
-	iradius_ = (int)(ROI_RADIUS / resolution + 0.5f);
+	iradius_ = (int)(ROI_RADIUS / RESOLUTION + 0.5f);
 	iradius2_ = iradius_ * iradius_;
-	iwidth_ = (int)(2 * ROI_RADIUS / resolution + 0.5f);
+	iwidth_ = (int)(2 * ROI_RADIUS / RESOLUTION + 0.5f);
 
 	// init value map
 	valuemap_ = new Value*[iwidth_];
@@ -209,7 +192,7 @@ ClusterBuilder::~ClusterBuilder()
 	delete[] bitmap_;
 }
 
-void ClusterBuilder::run(const PCLPointVector& points, const BitVector& filterBV, std::list<Cluster>& clusters)
+void ClusterBuilder::run(const PCLPointVector& points, const BitVector& filterBV, std::list<Cluster*>& clusters)
 {
 	clear();
 
@@ -227,13 +210,13 @@ void ClusterBuilder::run(const PCLPointVector& points, const BitVector& filterBV
 	{
 		for (int iy = 0; iy < iwidth_; ++iy)
 		{
-			if (bitmap_[ix][iy] == 1 || hitCount(ix, iy) == 0)
+			if (bitmap_[ix][iy] == 1 || hitCount(ix, iy) == 0 || top(ix, iy) < GROUND_Z + 2 * GROUND_EPS)
 			{
 				continue;
 			}
 
 			std::stack<Index> seeds;
-			Cluster cluster(cellSize_, baseZ_);
+			Cluster* cluster = new Cluster();
 
 			seeds.push(Index(ix, iy));
 			addPoint(ix, iy, cluster);
@@ -249,7 +232,7 @@ void ClusterBuilder::run(const PCLPointVector& points, const BitVector& filterBV
 					{
 						if ((ax == seed.x && ay == seed.y)
 						|| ax == -1 || ay == -1 || ax == iwidth_ || ay == iwidth_
-						|| bitmap_[ax][ay] == 1 || hitCount(ax, ay) == 0)
+						|| bitmap_[ax][ay] == 1 || hitCount(ax, ay) == 0 || top(ax, ay) < GROUND_Z + 2 * GROUND_EPS)
 						{
 							continue;
 						}
@@ -289,16 +272,16 @@ void ClusterBuilder::clear()
 
 void ClusterBuilder::hit(const PCLPoint& point)
 {
-	int rx = (int)(((value_type)point.x - centerX_) / cellSize_ + 0.5);
-	int ry = (int)(((value_type)point.y - centerY_) / cellSize_ + 0.5);
+	int rx = (int)(((value_type)point.x - centerX_) / RESOLUTION + 0.5);
+	int ry = (int)(((value_type)point.y - centerY_) / RESOLUTION + 0.5);
 
 	if (rx * rx + ry * ry > iradius2_)
 	{
 		return;
 	}
 
-	int x = (int)(((value_type)point.x - originX_) / cellSize_ + 0.5);
-	int y = (int)(((value_type)point.y - originY_) / cellSize_ + 0.5);
+	int x = (int)(((value_type)point.x - originX_) / RESOLUTION + 0.5);
+	int y = (int)(((value_type)point.y - originY_) / RESOLUTION + 0.5);
 
 	if (x < 0 || x >= iwidth_ || y < 0 || y >= iwidth_)
 	{
@@ -330,16 +313,21 @@ int ClusterBuilder::hitCount(int ix, int iy) const
 	return valuemap_[ix][iy].hit;
 }
 
-void ClusterBuilder::addPoint(int ix, int iy, Cluster& cluster)
+value_type ClusterBuilder::top(int ix, int iy) const
+{
+	return valuemap_[ix][iy].top;
+}
+
+void ClusterBuilder::addPoint(int ix, int iy, Cluster* cluster)
 {
 	const Value& value = valuemap_[ix][iy];
-	Vector3 cellPoint = Vector3(originX_ + ((value_type)ix + 0.5) * cellSize_,
-								originY_ + ((value_type)iy + 0.5) * cellSize_,
+	Vector3 cellPoint = Vector3(originX_ + ((value_type)ix + 0.5) * RESOLUTION,
+								originY_ + ((value_type)iy + 0.5) * RESOLUTION,
 								value.top);
 	int hitCount = value.hit;
 	value_type intensity = value.intensity;
 	value_type base = value.base;
-	cluster.add(cellPoint, hitCount, intensity, base);
+	cluster->add(cellPoint, hitCount, intensity, base);
 }
 
 }
