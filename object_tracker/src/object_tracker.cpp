@@ -1,5 +1,6 @@
 #include <object_tracker/define.h>
 #include <object_tracker/cluster.h>
+#include <object_tracker/filter.h>
 
 #include <ros/ros.h>
 #include <std_msgs/Float32MultiArray.h>
@@ -18,22 +19,29 @@ const int MAX_MARKER_COUNT = 30;
 const float GROUND_Z = -1.4f;
 const float GROUND_EPS = 0.1f;
 
-const float RESOLUTION = 0.1f;
+const float RESOLUTION = 0.15f;
 const float ROI_RADIUS = 21.0f;
 
-const int CAR_POINT_COUNT_THRESHOLD = 88;
-const int PEDESTRIAN_POINT_COUNT_THRESHOLD = 48;
-
+const int PEDESTRIAN_LABEL = 0;
+const int PEDESTRIAN_MIN_POINT_COUNT = 30;
 const float PEDESTRIAN_MAX_WIDTH = 1.2f;
 const float PEDESTRIAN_MIN_DEPTH = 1.2f;
 const float PEDESTRIAN_MAX_DEPTH = 2.0f;
 const float PEDESTRIAN_MAX_BASE = GROUND_Z + 0.9f;
-const float PEDESTRIAN_MAX_AREA = 0.5f;
+const float PEDESTRIAN_MAX_AREA = 0.45f;
+const float PEDESTRIAN_SPEED_LIMIT = 8.33f; // 30 km/h in m/s
+const float PEDESTRIAN_FILTER_INIT_TIME = 1.0f; // sec
+const float PEDESTRIAN_FILTER_RESET_TIME = 1.0f; // sec
+
+const int CAR_LABEL = 1;
+const int CAR_MIN_POINT_COUNT = 88;
 const float CAR_MAX_WIDTH = 6.5f;
 const float CAR_MIN_DEPTH = 0.3f;
 const float CAR_MAX_DEPTH = 1.7f;
-const float CAR_MIN_INTENSITY = 15.0f;
 const float CAR_MAX_AREA = 4.8f * 2.0f;
+const float CAR_SPEED_LIMIT = 27.78f; // 100 km/h in m/s
+const float CAR_FILTER_INIT_TIME = 1.0f; // sec
+const float CAR_FILTER_RESET_TIME = 1.0f; // sec
 
 const bool USE_RANSAC = true;
 const bool PUBLISH_GROUND = false;
@@ -54,6 +62,24 @@ public:
 
 		// init cluster builder
 		builder_ = new ClusterBuilder(0.0, 0.0, GROUND_Z, ROI_RADIUS, RESOLUTION);
+
+		// init point filter
+		float speedLimit = -1.0f;
+		float initTime = -1.0f;
+		float resetTime = -1.0f;
+		if (mode == "car")
+		{
+			speedLimit = CAR_SPEED_LIMIT;
+			initTime = CAR_FILTER_INIT_TIME;
+			resetTime = CAR_FILTER_RESET_TIME;
+		}
+		else if (mode == "ped")
+		{
+			speedLimit = PEDESTRIAN_SPEED_LIMIT;
+			initTime = PEDESTRIAN_FILTER_INIT_TIME;
+			resetTime = PEDESTRIAN_FILTER_RESET_TIME;
+		}		
+		filter_ = new Filter(speedLimit, initTime, resetTime);
 		
 		// ground filtering option
 		maxGround_ = GROUND_Z + GROUND_EPS;
@@ -64,18 +90,6 @@ public:
 
 		// cluster filtering option
 		mode_ = mode;
-		carMinPointCount_ = CAR_POINT_COUNT_THRESHOLD;
-		pedMinPointCount_ = PEDESTRIAN_POINT_COUNT_THRESHOLD;
-		pedMaxWidth_ = PEDESTRIAN_MAX_WIDTH;
-		pedMinTop_ = GROUND_Z + PEDESTRIAN_MIN_DEPTH;
-		pedMaxTop_ = GROUND_Z + PEDESTRIAN_MAX_DEPTH;
-		pedMaxBase_ = PEDESTRIAN_MAX_BASE;
-		pedMaxArea_ = PEDESTRIAN_MAX_AREA;
-		carMaxWidth_ = CAR_MAX_WIDTH;
-		carMinTop_ = GROUND_Z + CAR_MIN_DEPTH;
-		carMaxTop_ = GROUND_Z + CAR_MAX_DEPTH;
-		carMaxArea_ = CAR_MAX_AREA;
-		carMinIntensity_ = CAR_MIN_INTENSITY;
 
 		// init markers
         for (int i = 0; i < MAX_MARKER_COUNT; i++)
@@ -114,6 +128,8 @@ public:
 	~ObjectTracker()
 	{
 		delete builder_;
+
+		delete filter_;
 	}
 
 private:
@@ -163,8 +179,28 @@ private:
 		}
 
 		// filter clusters
-		std::list<Cluster> filteredClusters;
-		filterCluster(clusters, filteredClusters);
+		std::list<Cluster> filtered;
+
+		???
+		std::list<Cluster> sizeFiltered;
+		filterClusterBySize(clusters, sizeFiltered);
+		filterClusterByPosition(sizeFiltered, filtered);
+
+		if (filtered.empty())
+		{
+			if (!sizeFiltered.empty)
+			{
+				filterClusterByCount(clusters, filtered);
+			}
+			else if (!clusters.empty())
+			{
+				filterClusterByCount(clusters, filtered);
+			}
+			else
+			{
+				filtered.
+			}			
+		}
 
 		// publish clusters
 		publishMarkers(filteredClusters);
@@ -178,8 +214,8 @@ private:
 		BitVector::iterator bit = filterBV.begin();
 		for (; pit != points.end(); ++pit, ++bit)
 		{
-			if (pit->x > carMin_.x && pit->y > carMin_.y
-				&& pit->x < carMax_.x && pit->y < carMax_.y)
+			if (pit->x > carMin_(0) && pit->y > carMin_(1)
+				&& pit->x < carMax_(0) && pit->y < carMax_(1))
 			{
 				*bit = 1;
 			}
@@ -256,97 +292,51 @@ private:
 		}
 	}
 
-	void filterCluster(const std::list<Cluster>& input, std::list<Cluster>& output) const
+	void filterClusterBySize(const std::list<Cluster>& input, std::list<Cluster>& output) const
 	{
 		std::list<Cluster>::const_iterator cit = input.begin();
 		for (; cit != input.end(); ++cit)
 		{
-			value_type top = cit->max().z;
-			value_type base = cit->min().z;
+			value_type top = cit->max()(2);
+			value_type base = cit->min()(2);
 			value_type depth = top - base;
-			value_type maxWidth = std::max(cit->max().x - cit->min().x, cit->max().y - cit->min().y);
+			value_type maxWidth = std::max(cit->max()(0) - cit->min()(0), cit->max()(1) - cit->min()(1));
 			if (mode_ == "car")
 			{
-				if (maxWidth < pedMaxWidth_ || maxWidth > carMaxWidth_
-					|| top < carMinTop_ || top > carMaxTop_)
+				if (maxWidth < PEDESTRIAN_MAX_WIDTH || maxWidth > CAR_MAX_WIDTH
+					|| top < GROUND_Z + CAR_MIN_DEPTH || top > GROUND_Z + CAR_MAX_DEPTH)
 				{
 					continue;
 				}
-				else if (cit->pointCount() < carMinPointCount_)
+				else if (cit->pointCount() < CAR_MIN_POINT_COUNT)
 				{
 					continue;
 				}
-				else if (cit->maxIntensity() < carMinIntensity_)
-				{
-					continue;
-				}
-				else if (cit->area() > carMaxArea_)
+				else if (cit->area() > CAR_MAX_AREA)
 				{
 					continue;
 				}
 			}
 			else if (mode_ == "ped")
 			{
-				if (maxWidth > pedMaxWidth_ || top < pedMinTop_ || top > pedMaxTop_)
+				if (maxWidth > PEDESTRIAN_MAX_WIDTH 
+					|| top < GROUND_Z + PEDESTRIAN_MIN_DEPTH || top > GROUND_Z + PEDESTRIAN_MAX_DEPTH)
 				{
 					continue;
 				}
-				else if (base > pedMaxBase_)
+				else if (base > PEDESTRIAN_MAX_BASE)
 				{
 					continue;
 				}
-				else if (cit->pointCount() < pedMinPointCount_)
+				else if (cit->pointCount() < PEDESTRIAN_MIN_POINT_COUNT)
 				{
 					continue;
 				}
-				else if (cit->area() > pedMaxArea_)??? why is larger value pass this test?
+				else if (cit->area() > PEDESTRIAN_MAX_AREA)
 				{
 					continue;
 				}
 			}
-			// else if (mode_ == "car_ped")
-			// {
-			// 	// pedestrian
-			// 	if (maxWidth < pedMaxWidth_)
-			// 	{
-			// 		if (top < pedMinDepth_ || top > pedMaxDepth_)
-			// 		{
-			// 			continue;
-			// 		}
-			// 		else if (base > pedMaxBase_)
-			// 		{
-			// 			continue;
-			// 		}
-			// 		else if (cit->pointCount() < pedMinPointCount_)
-			// 		{
-			// 			continue;
-			// 		}
-			// 	}
-			// 	// car
-			// 	else if (maxWidth < carMaxWidth_)
-			// 	{
-			// 		if (depth < carMinDepth_ || depth > carMaxDepth_)
-			// 		{
-			// 			continue;
-			// 		}
-			// 		else if (cit->pointCount() < carMinPointCount_)
-			// 		{
-			// 			continue;
-			// 		}
-			// 		else if (cit->maxIntensity() < carMinIntensity_)
-			// 		{
-			// 			continue;
-			// 		}
-			// 		else if (cit->area() > carMaxArea_)
-			// 		{
-			// 			continue;
-			// 		}
-			// 	}
-			// 	else
-			// 	{
-			// 		continue;
-			// 	}
-			// }
 
 			output.push_back(*cit);
 		}
@@ -357,11 +347,11 @@ private:
 		float label = -1.0f;
 		if (mode_ == "car")
 		{
-			label = 0.0f;
+			label = (float)CAR_LABEL;
 		}
 		else if (mode_ == "ped")
 		{
-			label = 1.0f;
+			label = (float)PEDESTRIAN_LABEL;
 		}
 
 		int boxCnt = 0;
@@ -372,12 +362,12 @@ private:
 
 			Vector3 center = cit->center();
 			boxData_.data.push_back(label); // label
-			boxData_.data.push_back(center.x); // center
-			boxData_.data.push_back(center.y); // center
-			boxData_.data.push_back(center.z); // center
-			boxData_.data.push_back(cit->max().x - cit->min().x); // size
-			boxData_.data.push_back(cit->max().y - cit->min().y); // size
-			boxData_.data.push_back(cit->max().z - cit->min().z); // size
+			boxData_.data.push_back(center(0)); // center
+			boxData_.data.push_back(center(1)); // center
+			boxData_.data.push_back(center(2)); // center
+			boxData_.data.push_back(cit->max()(0) - cit->min()(0)); // size
+			boxData_.data.push_back(cit->max()(1) - cit->min()(1)); // size
+			boxData_.data.push_back(cit->max()(2) - cit->min()(2)); // size
 			boxData_.data.push_back(0.0); // rotation
 
 			++boxCnt;
@@ -397,19 +387,19 @@ private:
 		for (; cit != clusters.end(); ++cit)
 		{
 			ROS_INFO("ObjectTracker: points %d, depth %f, width %f, center %f %f %f, intensity %f, top %f, base %f, area %f",
-					cit->pointCount(), cit->max().z - cit->min().z, 
-					std::max(cit->max().x - cit->min().x, cit->max().y - cit->min().y),
-					cit->center().x, cit->center().y, cit->center().z,
+					cit->pointCount(), cit->max()(2) - cit->min()(2), 
+					std::max(cit->max()(0) - cit->min()(0), cit->max()(1) - cit->min()(1)),
+					cit->center()(0), cit->center()(1), cit->center()(2),
 					cit->maxIntensity(),
-					cit->max().z, cit->min().z,
+					cit->max()(2), cit->min()(2),
 					cit->area());
 			Vector3 center = cit->center();
-			mit->pose.position.x = center.x;
-			mit->pose.position.y = center.y;
-			mit->pose.position.z = center.z;
-			mit->scale.x = cit->max().x - cit->min().x;
-			mit->scale.y = cit->max().y - cit->min().y;
-			mit->scale.z = cit->max().z - cit->min().z;
+			mit->pose.position.x = center(0);
+			mit->pose.position.y = center(1);
+			mit->pose.position.z = center(2);
+			mit->scale.x = cit->max()(0) - cit->min()(0);
+			mit->scale.y = cit->max()(1) - cit->min()(1);
+			mit->scale.z = cit->max()(2) - cit->min()(2);
 			mit->color.a = 0.3;
 
 			++mit;
@@ -431,7 +421,8 @@ private:
 	ros::Publisher markerPublisher_;	
 	PCLPointCloud::Ptr cloud_;
 	// cluster builder
-	ClusterBuilder* builder_;	
+	ClusterBuilder* builder_;
+	Filter* filter_;	
 	// ground filtering option
 	value_type maxGround_;
 	// car filtering option
@@ -439,18 +430,6 @@ private:
 	Vector3 carMax_;
 	// cluster filtering option
 	std::string mode_;
-	int carMinPointCount_;
-	int pedMinPointCount_;
-	value_type pedMaxWidth_;
-	value_type pedMinTop_;
-	value_type pedMaxTop_;
-	value_type pedMaxBase_;
-	value_type pedMaxArea_;
-	value_type carMaxWidth_;
-	value_type carMinTop_;
-	value_type carMaxTop_;
-	value_type carMinIntensity_;
-	value_type carMaxArea_;
 	// box data
 	std_msgs::Float32MultiArray boxData_;
 	// marker array

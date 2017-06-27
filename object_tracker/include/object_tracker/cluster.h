@@ -1,7 +1,6 @@
 #pragma once
 
 #include <object_tracker/define.h>
-#include <object_tracker/vector3.h>
 #include <list>
 
 namespace TeamKR
@@ -9,8 +8,13 @@ namespace TeamKR
 
 class Cluster
 {
+protected:
+	Cluster();
+
 public:
 	Cluster(value_type resolution, value_type baseZ);
+
+	Cluster(const Cluster& rhs);
 
 	~Cluster();
 

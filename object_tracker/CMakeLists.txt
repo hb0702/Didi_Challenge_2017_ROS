@@ -76,10 +76,9 @@ add_executable(bag_player
   src/bag_player.cpp
 )
 add_executable(object_tracker
-  src/vector3.cpp
   src/cluster.cpp
+  src/filter.cpp
   src/object_tracker.cpp
-  src/tracker.cpp
 )
 
 # This will link executables to the appropriate libraries

@@ -6,13 +6,28 @@ const float MAX_VALUE = 1000.0f;
 namespace TeamKR
 {
 
+Cluster::Cluster()
+{
+}
+
 Cluster::Cluster(value_type resolution, value_type baseZ)
 {
 	cellSize_ = resolution;
 	pointCount_ = 0;
 	baseZ_ = baseZ;
-	min_.set(MAX_VALUE, MAX_VALUE, MAX_VALUE);
-	max_.set(-MAX_VALUE, -MAX_VALUE, -MAX_VALUE);
+	min_ << MAX_VALUE, MAX_VALUE, MAX_VALUE;
+	max_ << -MAX_VALUE, -MAX_VALUE, -MAX_VALUE;
+}
+
+Cluster::Cluster(const Cluster& rhs)
+{
+	cellSize_ = rhs.cellSize_;
+	pointCount_ = rhs.pointCount_;
+	points_ = rhs.points_;
+	baseZ_ = rhs.baseZ_;
+	min_ = rhs.min_;
+	max_ = rhs.max_;
+	maxIntensity_ = rhs.maxIntensity_;
 }
 
 Cluster::~Cluster()
@@ -24,29 +39,29 @@ void Cluster::add(const Vector3& point, int hitCount, value_type intensity, valu
 {
 	points_.push_back(point);
 
-	if (min_.x > point.x - 0.5 * cellSize_)
+	if (min_(0) > point(0) - 0.5 * cellSize_)
 	{
-		min_.x = point.x - 0.5 * cellSize_;
+		min_(0) = point(0) - 0.5 * cellSize_;
 	}
-	if (min_.y > point.y - 0.5 * cellSize_)
+	if (min_(1) > point(1) - 0.5 * cellSize_)
 	{
-		min_.y = point.y - 0.5 * cellSize_;
+		min_(1) = point(1) - 0.5 * cellSize_;
 	}
-	if (min_.z > point.z - 0.5 * cellSize_)
+	if (min_(2) > point(2) - 0.5 * cellSize_)
 	{
-		min_.z = point.z - 0.5 * cellSize_;
+		min_(2) = point(2) - 0.5 * cellSize_;
 	}
-	if (max_.x < point.x + 0.5 * cellSize_)
+	if (max_(0) < point(0) + 0.5 * cellSize_)
 	{
-		max_.x = point.x + 0.5 * cellSize_;
+		max_(0) = point(0) + 0.5 * cellSize_;
 	}
-	if (max_.y < point.y + 0.5 * cellSize_)
+	if (max_(1) < point(1) + 0.5 * cellSize_)
 	{
-		max_.y = point.y + 0.5 * cellSize_;
+		max_(1) = point(1) + 0.5 * cellSize_;
 	}
-	if (max_.z < point.z + 0.5 * cellSize_)
+	if (max_(2) < point(2) + 0.5 * cellSize_)
 	{
-		max_.z = point.z + 0.5 * cellSize_;
+		max_(2) = point(2) + 0.5 * cellSize_;
 	}
 
 	pointCount_ += hitCount;
@@ -56,9 +71,9 @@ void Cluster::add(const Vector3& point, int hitCount, value_type intensity, valu
 		maxIntensity_ = intensity;
 	}
 
-	if (min_.z > point.z - 0.5 * cellSize_)
+	if (min_(2) > point(2) - 0.5 * cellSize_)
 	{
-		min_.z = point.z - 0.5 * cellSize_;
+		min_(2) = point(2) - 0.5 * cellSize_;
 	}
 }
 
@@ -74,7 +89,7 @@ const Vector3& Cluster::max() const
 
 Vector3 Cluster::center() const
 {
-	return Vector3(0.5 * (min_.x + max_.x), 0.5 * (min_.y + max_.y), 0.5 * (min_.z + max_.z));
+	return Vector3(0.5 * (min_(0) + max_(0)), 0.5 * (min_(1) + max_(1)), 0.5 * (min_(2) + max_(2)));
 }
 
 int Cluster::pointCount() const
@@ -89,14 +104,16 @@ value_type Cluster::maxIntensity() const
 
 value_type Cluster::area() const
 {
-	int w = (max_.x - min_.x) / cellSize_ + 1;
-	int h = (max_.y - min_.y) / cellSize_ + 1;
+	value_type r = cellSize_;
+
+	int w = (max_(0) - min_(0)) / r + 1;
+	int h = (max_(1) - min_(1)) / r + 1;
 
 	// init hit map
-	int** hitmap = new int*[w];
+	char** hitmap = new char*[w];
 	for (int ix = 0; ix < w; ++ix)
 	{
-		hitmap[ix] = new int[h];
+		hitmap[ix] = new char[h];
 		for (int iy = 0; iy < h; ++iy)
 		{
 			hitmap[ix][iy] = 0;
@@ -106,28 +123,25 @@ value_type Cluster::area() const
 	// mark hit map
 	for (std::list<Vector3>::const_iterator it = points_.begin(); it != points_.end(); ++it)
 	{
-		int ix = (int)((it->x - min_.x) / cellSize_);
-		int iy = (int)((it->y - min_.y) / cellSize_);
-		hitmap[ix][iy] += 1;
+		int ix = (int)(((*it)(0) - min_(0)) / r);
+		int iy = (int)(((*it)(1) - min_(1)) / r);
+		hitmap[ix][iy] = 1;
 	}
-
-	printf("hitmap marked\n");
 
 	value_type ar = 0.0;
 
 	for (int ix = 0; ix < w; ++ix)
 	{
-		hitmap[ix] = new int[h];
 		for (int iy = 0; iy < h; ++iy)
 		{
-			if (hitmap[ix][iy] > 0)
+			if (hitmap[ix][iy] == 1)
 			{
 				ar += 1.0;
 			}
 		}
 	}
 
-	ar *= cellSize_ * cellSize_;
+	ar *= r * r;
 
 	// delete hit map
 	for (int ix = 0; ix < w; ++ix)
