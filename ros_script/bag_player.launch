@@ -4,10 +4,10 @@
   <arg name="make_tracklet" />
   <arg name="tracklet_dir" />
 
-  <node name="bag_player" pkg="object_tracker" type="bag_player" args="$(arg bag_file_path)" respawn="false" output="screen" required="true"/>
-
   <group if="$(arg make_tracklet)">
     <node name="tracklet_writer" pkg="object_tracker" type="tracklet_writer.py" args="$(arg bag_file_path) $(arg tracklet_dir)" respawn="false" output="screen" required="true"/>
   </group>
+
+  <node name="bag_player" pkg="object_tracker" type="bag_player" args="$(arg bag_file_path)" respawn="false" output="screen" required="true"/>
 
 </launch>
