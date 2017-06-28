@@ -45,7 +45,6 @@ class tracklet_writer:
 			for tracklet in self.tracklets:
 				tracklet.first_frame = self.image_cnt
 				self.collection.tracklets.append(tracklet)
-				print('tracklet added!')
 		self.image_cnt += 1
 	
 	def write_file(self):
