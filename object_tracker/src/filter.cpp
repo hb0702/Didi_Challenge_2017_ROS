@@ -44,8 +44,12 @@ void Filter::filterBySize(const std::list<Cluster*>& input, std::list<Cluster*>&
 		value_type maxWidth = std::max((*cit)->max()(0) - (*cit)->min()(0), (*cit)->max()(1) - (*cit)->min()(1));
 		if (mode_ == "car")
 		{
-			if (maxWidth < PEDESTRIAN_MAX_WIDTH || maxWidth > CAR_MAX_WIDTH
+			if (maxWidth > CAR_MAX_WIDTH
 				|| top < GROUND_Z + CAR_MIN_DEPTH || top > GROUND_Z + CAR_MAX_DEPTH)
+			{
+				continue;
+			}
+			else if (base > CAR_MAX_BASE)
 			{
 				continue;
 			}
@@ -77,6 +81,7 @@ void Filter::filterBySize(const std::list<Cluster*>& input, std::list<Cluster*>&
 			{
 				continue;
 			}
+			printf("area %f\n", (*cit)->area());
 		}
 
 		output.push_back(*cit);
@@ -275,10 +280,14 @@ Vector2 Filter::velocity(const Vector2& pos, double time) const
 Box* Filter::toBox(Cluster* cluster) const
 {
 	Box* box = new Box();
+	Vector3 top = cluster->top();
 	Vector3 center = cluster->center();
 	Vector3 min = cluster->min();
 	Vector3 max = cluster->max();
 
+	box->topx = top(0);
+	box->topy = top(1);
+	box->topz = top(2);
 	box->px = center(0);
 	box->py = center(1);
 	box->pz = center(2);

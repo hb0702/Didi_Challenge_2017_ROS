@@ -22,6 +22,8 @@ public:
 
 	Vector3 center() const;
 
+	const Vector3& top() const;
+
 	int pointCount() const;
 
 	value_type maxIntensity() const;
@@ -34,6 +36,7 @@ private:
 	Vector3 min_;
 	Vector3 max_;
 	value_type maxIntensity_;
+	Vector3 top_;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,6 +63,8 @@ public:
 		{
 			hit = 0;
 			top = value_type(-1000.0);
+			topx = value_type(0);
+			topy = value_type(0);
 			base = value_type(1000.0);
 			intensity = value_type(0);
 		}
@@ -68,12 +73,16 @@ public:
 		{
 			hit = 0;
 			top = value_type(-1000.0);
+			topx = value_type(0);
+			topy = value_type(0);
 			base = value_type(1000.0);
 			intensity = value_type(0);
 		}
 
 		int hit;
 		value_type top;
+		value_type topx;
+		value_type topy;
 		value_type base;
 		value_type intensity;
 	};

@@ -355,14 +355,23 @@ private:
 		std::list<Box*>::const_iterator bit = boxes.begin();
 		for (; bit != boxes.end(); ++bit)
 		{
-			boxData_.data.push_back(label); // label 			0
-			boxData_.data.push_back((*bit)->px); // center		1
-			boxData_.data.push_back((*bit)->py); // center		2
-			boxData_.data.push_back((*bit)->pz); // center		3
-			boxData_.data.push_back((*bit)->width); // size 	4
-			boxData_.data.push_back((*bit)->height); // size 	5
-			boxData_.data.push_back((*bit)->depth); // size 	6
-			boxData_.data.push_back(0.0); // rotation 			7
+			boxData_.data.push_back(label); // label 				0
+			// if (mode_ == "car")
+			{
+				boxData_.data.push_back((*bit)->px); // center		1
+				boxData_.data.push_back((*bit)->py); // center		2
+				boxData_.data.push_back((*bit)->pz); // center		3
+			}
+			// else if (mode_ == "ped")
+			// {
+			// 	boxData_.data.push_back((*bit)->topx); // center	1
+			// 	boxData_.data.push_back((*bit)->topy); // center	2
+			// 	boxData_.data.push_back((*bit)->topz); // center	3
+			// }
+			boxData_.data.push_back((*bit)->width); // size 		4
+			boxData_.data.push_back((*bit)->height); // size 		5
+			boxData_.data.push_back((*bit)->depth); // size 		6
+			boxData_.data.push_back(0.0); // rotation 				7
 
 			++boxCnt;
 		}

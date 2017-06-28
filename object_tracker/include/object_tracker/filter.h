@@ -14,6 +14,7 @@ public:
 		px = py = pz = 0;
 		width = height = depth = 0;
 		rx = ry = rz = 0;
+		topx = topy = topz = 0;
 	}
 
 	Box(const Box& rhs)
@@ -21,6 +22,7 @@ public:
 		px = rhs.px; py = rhs.py; pz = rhs.pz;
 		width = rhs.width; height = rhs.height; depth = rhs.depth;
 		rx = rhs.rx; ry = rhs.ry; rz = rhs.rz;
+		topx = rhs.topx; topy = rhs.topy; topz = rhs.topz;
 	}
 
 	~Box()
@@ -38,6 +40,9 @@ public:
 	value_type rx;
 	value_type ry;
 	value_type rz;
+	value_type topx;
+	value_type topy;
+	value_type topz;
 };
 
 class Filter

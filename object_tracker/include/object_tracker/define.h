@@ -40,12 +40,13 @@ const float PEDESTRIAN_FILTER_INIT_TIME = 1.0f; // sec
 const float PEDESTRIAN_FILTER_RESET_TIME = 1.0f; // sec
 
 const int CAR_LABEL = 1;
-const int CAR_MIN_POINT_COUNT = 88;
+const int CAR_MIN_POINT_COUNT = 68;
 const float CAR_MAX_WIDTH = 6.5f;
-const float CAR_MIN_DEPTH = 0.3f;
+const float CAR_MIN_DEPTH = 0.8f;
 const float CAR_MAX_DEPTH = 1.7f;
+const float CAR_MAX_BASE = GROUND_Z + 0.6f;
 const float CAR_MAX_AREA = 4.8f * 2.0f;
-const float CAR_SPEED_LIMIT = 27.78f; // 100 km/h in m/s
+const float CAR_SPEED_LIMIT = 16.67f; // 60 km/h in m/s
 const float CAR_FILTER_INIT_TIME = 1.0f; // sec
 const float CAR_FILTER_RESET_TIME = 1.0f; // sec
 

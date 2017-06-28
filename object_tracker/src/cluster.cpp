@@ -12,6 +12,7 @@ Cluster::Cluster()
 	min_ << MAX_VALUE, MAX_VALUE, MAX_VALUE;
 	max_ << -MAX_VALUE, -MAX_VALUE, -MAX_VALUE;
 	maxIntensity_ = 0;
+	top_ << 0, 0, 0;
 }
 
 Cluster::~Cluster()
@@ -31,9 +32,9 @@ void Cluster::add(const Vector3& point, int hitCount, value_type intensity, valu
 	{
 		min_(1) = point(1) - 0.5 * RESOLUTION;
 	}
-	if (min_(2) > point(2) - 0.5 * RESOLUTION)
+	if (min_(2) > point(2))
 	{
-		min_(2) = point(2) - 0.5 * RESOLUTION;
+		min_(2) = point(2);
 	}
 	if (max_(0) < point(0) + 0.5 * RESOLUTION)
 	{
@@ -43,9 +44,10 @@ void Cluster::add(const Vector3& point, int hitCount, value_type intensity, valu
 	{
 		max_(1) = point(1) + 0.5 * RESOLUTION;
 	}
-	if (max_(2) < point(2) + 0.5 * RESOLUTION)
+	if (max_(2) < point(2))
 	{
-		max_(2) = point(2) + 0.5 * RESOLUTION;
+		max_(2) = point(2);
+		top_ = point;
 	}
 
 	pointCount_ += hitCount;
@@ -74,6 +76,11 @@ const Vector3& Cluster::max() const
 Vector3 Cluster::center() const
 {
 	return Vector3(0.5 * (min_(0) + max_(0)), 0.5 * (min_(1) + max_(1)), 0.5 * (min_(2) + max_(2)));
+}
+
+const Vector3& Cluster::top() const
+{
+	return top_;
 }
 
 int Cluster::pointCount() const
