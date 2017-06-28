@@ -4,7 +4,7 @@ import os
 import rospy as rp
 import numpy as np
 from sensor_msgs.msg import Image
-from std_msgs.msg import Float32MultyArray, MultiArrayDimension
+from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 import sensor_msgs.point_cloud2 as pc2
 import tracklet as t
 
@@ -19,7 +19,7 @@ class tracklet_writer:
 		output_filebase = os.path.splitext(os.path.basename(input_file))[0] + '.xml'
 		self.output_file = os.path.join(output_folder, output_filebase)
 
-		self.box_subscriber = rp.Subscriber("/tracker/boxes", Float32MultyArray, self.on_box_received)
+		self.box_subscriber = rp.Subscriber("/tracker/boxes", Float32MultiArray, self.on_box_received)
 		self.image_subscriber = rp.Subscriber("/image_raw", Image, self.on_image_received)
 
 		self.tracklets = []
@@ -31,22 +31,21 @@ class tracklet_writer:
 		self.tracklets = []
 		box_arr = np.array(data.data).reshape(-1, 8)
 		for box in box_arr:
-			tracklet = t.Tracklet()
-			tracklet.object_type = 'Pedestrian' if box[0] == 0 else 'Car'
-			tracklet.l = box[4]
-			tracklet.w = box[5]
-			tracklet.h = box[6]
-			pos['tx'] = box[1]
-			pos['ty'] = box[2]
-			pos['tz'] = box[3]
-			pos['rz'] = box[7]
-			tracklets.append(tracklet)
+			object_type = 'Pedestrian' if box[0] == 0 else 'Car'
+			l = box[4]
+			w = box[5]
+			h = box[6]
+			tracklet = t.Tracklet(object_type=object_type, l=l, w=w, h=h)
+			pos = {'tx':box[1], 'ty':box[2], 'tz':box[3], 'rx':0.0, 'ry':0.0, 'rz':box[7]}
+			tracklet.poses.append(pos)
+			self.tracklets.append(tracklet)
 
 	def on_image_received(self, data):
-		if not self.tracklets:
+		if self.tracklets:			
 			for tracklet in self.tracklets:
 				tracklet.first_frame = self.image_cnt
 				self.collection.tracklets.append(tracklet)
+				print('tracklet added!')
 		self.image_cnt += 1
 	
 	def write_file(self):
