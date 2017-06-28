@@ -3,7 +3,6 @@ From Udacity Didi-challenge code.
 Modified: Jaeil Park
 """
 
-
 def writeln(f, string, tab_count, tab_as_space=False):
     tab_spaces = 4
     indent_str = " " * tab_spaces * tab_count if tab_as_space else "\t" * tab_count
@@ -14,9 +13,9 @@ class Tracklet(object):
 
     def __init__(self, object_type, l, w, h, first_frame=0):
         self.object_type = object_type
-        self.h = h
-        self.w = w
-        self.l = l
+        self.h = h # z length
+        self.w = w # y length
+        self.l = l # x length
         self.first_frame = first_frame
         self.poses = []
 

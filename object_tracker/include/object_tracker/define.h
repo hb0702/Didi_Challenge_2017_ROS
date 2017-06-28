@@ -28,6 +28,7 @@ const float RESOLUTION = 0.15f;
 const float ROI_RADIUS = 21.0f;
 
 const int PEDESTRIAN_LABEL = 0;
+const float PEDESTRIAN_ACTUAL_DEPTH = 1.708f;
 const int PEDESTRIAN_MIN_POINT_COUNT = 30;
 const float PEDESTRIAN_MAX_WIDTH = 1.2f;
 const float PEDESTRIAN_MIN_DEPTH = 1.2f;

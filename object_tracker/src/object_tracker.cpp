@@ -90,9 +90,9 @@ public:
             marker.scale.y = 0.2;
             marker.scale.z = 0.2;
             marker.color.a = 0.0;
-            marker.color.r = 0.0;
-            marker.color.g = 0.0;
-            marker.color.b = 1.0;
+            marker.color.r = 1.0;
+            marker.color.g = 1.0;
+            marker.color.b = 0.0;
             predictedMarkers_.markers.push_back(marker);
         }
 
@@ -283,13 +283,13 @@ private:
 		std::vector<visualization_msgs::Marker>::iterator mit = detectedMarkers_.markers.begin();
 		for (; cit != clusters.end(); ++cit)
 		{
-			ROS_INFO("ObjectTracker: detected: points %d, depth %f, width %f, center %f %f %f, intensity %f, top %f, base %f, area %f",
-					(*cit)->pointCount(), (*cit)->max()(2) - (*cit)->min()(2), 
-					std::max((*cit)->max()(0) - (*cit)->min()(0), (*cit)->max()(1) - (*cit)->min()(1)),
-					(*cit)->center()(0), (*cit)->center()(1), (*cit)->center()(2),
-					(*cit)->maxIntensity(),
-					(*cit)->max()(2), (*cit)->min()(2),
-					(*cit)->area());
+			// ROS_INFO("ObjectTracker: detected: points %d, depth %f, width %f, center %f %f %f, intensity %f, top %f, base %f, area %f",
+			// 		(*cit)->pointCount(), (*cit)->max()(2) - (*cit)->min()(2), 
+			// 		std::max((*cit)->max()(0) - (*cit)->min()(0), (*cit)->max()(1) - (*cit)->min()(1)),
+			// 		(*cit)->center()(0), (*cit)->center()(1), (*cit)->center()(2),
+			// 		(*cit)->maxIntensity(),
+			// 		(*cit)->max()(2), (*cit)->min()(2),
+			// 		(*cit)->area());
 			Vector3 center = (*cit)->center();
 			mit->pose.position.x = center(0);
 			mit->pose.position.y = center(1);
@@ -311,9 +311,9 @@ private:
 		mit = predictedMarkers_.markers.begin();
 		for (; bit != boxes.end(); ++bit)
 		{
-			ROS_INFO("ObjectTracker: predicted: size %f %f %f, center %f %f %f",
-					(*bit)->width, (*bit)->height, (*bit)->depth,
-					(*bit)->px, (*bit)->py, (*bit)->pz);
+			// ROS_INFO("ObjectTracker: predicted: size %f %f %f, center %f %f %f",
+			// 		(*bit)->width, (*bit)->height, (*bit)->depth,
+			// 		(*bit)->px, (*bit)->py, (*bit)->pz);
 			mit->pose.position.x = (*bit)->px;
 			mit->pose.position.y = (*bit)->py;
 			mit->pose.position.z = (*bit)->pz;
@@ -335,7 +335,7 @@ private:
         // publish markers
         detectedMarkerPublisher_.publish(detectedMarkers_);
         predictedMarkerPublisher_.publish(predictedMarkers_);
-        ROS_INFO("ObjectTracker: published %d markers", markerCnt);
+        // ROS_INFO("ObjectTracker: published %d markers", markerCnt);
 	}
 
 	void publishBoxes(const std::list<Box*>& boxes)
@@ -355,14 +355,14 @@ private:
 		std::list<Box*>::const_iterator bit = boxes.begin();
 		for (; bit != boxes.end(); ++bit)
 		{
-			boxData_.data.push_back(label); // label
-			boxData_.data.push_back((*bit)->px); // center
-			boxData_.data.push_back((*bit)->py); // center
-			boxData_.data.push_back((*bit)->pz); // center
-			boxData_.data.push_back((*bit)->width); // size
-			boxData_.data.push_back((*bit)->height); // size
-			boxData_.data.push_back((*bit)->depth); // size
-			boxData_.data.push_back(0.0); // rotation
+			boxData_.data.push_back(label); // label 			0
+			boxData_.data.push_back((*bit)->px); // center		1
+			boxData_.data.push_back((*bit)->py); // center		2
+			boxData_.data.push_back((*bit)->pz); // center		3
+			boxData_.data.push_back((*bit)->width); // size 	4
+			boxData_.data.push_back((*bit)->height); // size 	5
+			boxData_.data.push_back((*bit)->depth); // size 	6
+			boxData_.data.push_back(0.0); // rotation 			7
 
 			++boxCnt;
 		}

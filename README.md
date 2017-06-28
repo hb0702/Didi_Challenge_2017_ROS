@@ -13,10 +13,9 @@
 		source ~/catkin_ws/devel/setup.bash
 		export ROS_MASTER_URI=http://localhost:11311 export ROS_HOSTNAME=localhost
 
-* Install opencv
-
-        $ pip install opencv-python
-
+* Install Eigen
+* Install PCL ROS
+* Install ROS BAG
 * Install CUDA and CuDNN
 * Install tensorflow-gpu
 
@@ -63,18 +62,20 @@
 
 * Run object_tracker in ros_script
 
-        $ object_tracker
-
-    - Add --use_cpp_node option if you want to use cpp node
+    - Pedestrian detection
     
-            $ object_tracker --use_cpp_node
+            $ object_tracker --ped
+
+    - Car detection
+    
+            $ object_tracker --car
 
 * Run rviz to visualize (optional)
 
         $ rviz
 
     - Fixed frame: velodyne
-    - Topics: PointCloud2(/velodyne_points), MarkerArray(/tracker/boxes)
+    - Topics: PointCloud2(/velodyne_points), MarkerArray(/tracker/boxes/markers/predict)
 
 * Run bag_player in ros_script with bag file path
 
@@ -82,4 +83,12 @@
 
     - ex)
     
-            $ bag_player --file_path /home/parkjaeil0108/challenge/Didi-Training-Release-1/approach_1.bag
+            $ bag_player --file_path /home/jaeil/challenge/Didi-Training-Release-1/approach_1.bag
+
+* Generate tracklet with bag_player in ros_script with bag file path and tracklet save directory to generate tracklet
+
+        $ bag_player --file_path [full path of .bag file] --tracklet [directory to save tracklet file]
+
+    - ex)
+    
+            $ bag_player --file_path /home/jaeil/challenge/Didi-Training-Release-1/approach_1.bag --tracklet /home/jaeil/challenge/tracklet
