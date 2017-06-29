@@ -213,11 +213,12 @@ private:
 			filteredCusters_.clear();
 		}
 
-		// clear boxes
+		// clear published boxes
 		for (std::list<Box*>::iterator it = boxes.begin(); it != boxes.end(); ++it)
 		{
 			delete *it;
 		}
+		boxes_.clear();
 
 		frameCnt_++;
 	}
