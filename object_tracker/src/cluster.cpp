@@ -29,6 +29,7 @@ Cluster* Cluster::clone() const
 	target->max_ = this->max_;
 	target->maxIntensity_ = this->maxIntensity_;
 	target->top_ = this->top_;
+	return target;
 }
 
 void Cluster::add(const Vector3& point, int hitCount, value_type intensity, value_type minZ)

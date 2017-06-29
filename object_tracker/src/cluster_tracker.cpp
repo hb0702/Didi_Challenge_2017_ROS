@@ -15,6 +15,8 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 
+#include <boost/thread/mutex.hpp>
+
 namespace TeamKR
 {
 
@@ -163,23 +165,35 @@ private:
 			return;
 		}
 
-		// clear saved clusters
-		if (!filteredCusters_.empty())
-		{
-			for (std::list<Cluster*>::iterator it = filteredCusters_.begin(); it != filteredCusters_.end(); ++it)
-			{
-				delete *it;
-			}
-			filteredCusters_.clear();
-		}
-		
 		// filter by size
-		filter_->filterBySize(clusters, filteredCusters_);
-		
+		std::list<Cluster*> filtered;
+		filter_->filterBySize(clusters, filtered);
+
+		filteredClustersMutex_.lock();
+		// clear filtered clusters
+		if (!filteredClusters_.empty())
+		{
+			for (std::list<Cluster*>::iterator it = filteredClusters_.begin(); it != filteredClusters_.end(); ++it)
+			{
+				Cluster* cluster = *it;
+				delete cluster;
+			}
+			filteredClusters_.clear();
+		}
+		// copy
+		//std::copy(filtered.begin(), filtered.end(), filteredClusters_.begin());
+		for (std::list<Cluster*>::const_iterator it = filtered.begin(); it != filtered.end(); ++it)
+		{
+			Cluster* cluster = *it;
+			filteredClusters_.push_back(cluster);
+		}
+		filteredClustersMutex_.unlock();
+
 		// clear temp clusters
 		for (std::list<Cluster*>::iterator it = clusters.begin(); it != clusters.end(); ++it)
 		{
-			delete *it;
+			Cluster* cluster = *it;
+			delete cluster;
 		}
 	}
 
@@ -188,29 +202,46 @@ private:
 		int tsSec = msg->header.stamp.sec;
 		int tsNsec = msg->header.stamp.nsec;
 
+		std::list<Cluster*> filtered;
+		// deep copy filtered cluster and clear source
+		filteredClustersMutex_.lock();
+		if (!filteredClusters_.empty())
+		{
+			for (std::list<Cluster*>::const_iterator it = filteredClusters_.begin(); it != filteredClusters_.end(); ++it)
+			{
+				Cluster* cluster = *it;
+				Cluster* cloned = cluster->clone();
+				filtered.push_back(cloned);
+				delete cluster;
+			}
+			filteredClusters_.clear();
+		}
+		filteredClustersMutex_.unlock();
+
 		// filter by velocity
 		std::list<Box*> boxes;
-		filter_->filterByVelocity(filteredCusters_, tsSec, tsNsec, boxes);
+		filter_->filterByVelocity(filtered, tsSec, tsNsec, boxes);
 
 		// publish result
 		if (PUBLISH_MARKERS)
 		{
 			// publish detected clusters
-			publishMarkers(filteredCusters_, boxes);
+			publishMarkers(filtered, boxes);
 		}
 		if (!boxes.empty())
 		{
+			printf("pub boxes at %d\n", frameCnt_);
 			publishBoxes(boxes, frameCnt_);
 		}
 
 		// clear used clusters
-		if (!filteredCusters_.empty())
+		if (!filtered.empty())
 		{
-			for (std::list<Cluster*>::iterator it = filteredCusters_.begin(); it != filteredCusters_.end(); ++it)
+			for (std::list<Cluster*>::iterator it = filtered.begin(); it != filtered.end(); ++it)
 			{
 				delete *it;
 			}
-			filteredCusters_.clear();
+			filtered.clear();
 		}
 
 		// clear published boxes
@@ -218,7 +249,7 @@ private:
 		{
 			delete *it;
 		}
-		boxes_.clear();
+		boxes.clear();
 
 		frameCnt_++;
 	}
@@ -367,7 +398,8 @@ private:
         // publish markers
         detectedMarkerPublisher_.publish(detectedMarkers_);
         predictedMarkerPublisher_.publish(predictedMarkers_);
-        // ROS_INFO("ClusterTracker: published %d markers", markerCnt);
+        ROS_INFO("ClusterTracker: published %d markers", markerCnt);
+
 	}
 
 	void publishBoxes(const std::list<Box*>& boxes, int numFrame)
@@ -422,7 +454,7 @@ private:
 	ros::Publisher predictedMarkerPublisher_;
 	// data
 	PCLPointCloud::Ptr cloud_;
-	std::list<Cluster*> filteredCusters_;
+	std::list<Cluster*> filteredClusters_;
 	std_msgs::Float32MultiArray boxData_;
 	int frameCnt_;
 	// cluster builder
@@ -442,6 +474,8 @@ private:
 	// publish ground
 	ros::Publisher publisherGround_;
 	PCLPointCloud::Ptr cloudGround_;
+	// mutex
+	boost::mutex filteredClustersMutex_;
 };
 
 }
