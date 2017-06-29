@@ -1,0 +1,15 @@
+<launch>
+  <!-- declare arg to be passed in -->
+  <arg name="object_mode" />
+
+  <!-- start nodelet manager and driver nodelets -->
+  <include file="$(find velodyne_driver)/launch/nodelet_manager.launch" />
+  <!-- start cloud nodelet -->
+  <include file="$(find velodyne_pointcloud)/launch/cloud_nodelet.launch">
+    <arg name="calibration"
+         value="$(find velodyne_pointcloud)/params/32db.yaml"/>
+  </include>
+
+  <node name="dl_tracker" pkg="dl_tracker" type="dl_tracker" args="$(arg object_mode)" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
+
+</launch>

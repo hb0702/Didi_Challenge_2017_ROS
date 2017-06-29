@@ -18,12 +18,9 @@ class tracklet_writer:
 		self.output_folder = output_folder
 		output_filebase = os.path.splitext(os.path.basename(input_file))[0] + '.xml'
 		self.output_file = os.path.join(output_folder, output_filebase)
-
 		self.box_subscriber = rp.Subscriber("/tracker/boxes", Float32MultiArray, self.on_box_received)
-
 		self.collection = t.TrackletCollection()
-		self.image_cnt = 0
-	
+		
 	def on_box_received(self, data):
 		#rp.loginfo(rp.get_caller_id() + " Point received, %d", self.lidar_cnt)
 		self.boxes = []

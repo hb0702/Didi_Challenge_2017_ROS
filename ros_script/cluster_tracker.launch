@@ -10,6 +10,6 @@
          value="$(find velodyne_pointcloud)/params/32db.yaml"/>
   </include>
 
-  <node name="object_tracker" pkg="object_tracker" type="object_tracker" args="$(arg object_mode)" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
+  <node name="cluster_tracker" pkg="cluster_tracker" type="cluster_tracker" args="$(arg object_mode)" respawn="false" output="screen" cwd="ROS_HOME" required="false" />
 
 </launch>

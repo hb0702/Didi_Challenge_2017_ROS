@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(object_tracker)
+project(cluster_tracker)
 
 ## Add support for C++11, supported in ROS Kinetic and newer
 # add_definitions(-std=c++11)
@@ -41,7 +41,7 @@ find_package(Eigen REQUIRED)
 catkin_package(
   INCLUDE_DIRS
     include
-#  LIBRARIES object_tracker
+#  LIBRARIES cluster_tracker
   CATKIN_DEPENDS
     roscpp
     rospy
@@ -62,7 +62,7 @@ include_directories(
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/object_tracker.cpp
+#   src/${PROJECT_NAME}/cluster_tracker.cpp
 # )
 
 # This will generate message header file before building the target
@@ -73,15 +73,15 @@ include_directories(
 add_executable(bag_player
   src/bag_player.cpp
 )
-add_executable(object_tracker
+add_executable(cluster_tracker
   src/cluster.cpp
   src/filter.cpp
-  src/object_tracker.cpp
+  src/cluster_tracker.cpp
 )
 
 # This will link executables to the appropriate libraries
 target_link_libraries(bag_player ${catkin_LIBRARIES})
-target_link_libraries(object_tracker ${catkin_LIBRARIES})
+target_link_libraries(cluster_tracker ${catkin_LIBRARIES})
 
 # set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")
 

@@ -18,13 +18,13 @@
 namespace TeamKR
 {
 
-class ObjectTracker
+class ClusterTracker
 {
 public:
-	ObjectTracker(ros::NodeHandle n, const std::string& mode)
+	ClusterTracker(ros::NodeHandle n, const std::string& mode)
 	{
-    	pointSubscriber_ = n.subscribe("/velodyne_points", 1, &ObjectTracker::onPointsReceived, this);
-    	imageSubscriber_ = n.subscribe("/image_raw", 1, &ObjectTracker::onImageReceived, this);
+    	pointSubscriber_ = n.subscribe("/velodyne_points", 1, &ClusterTracker::onPointsReceived, this);
+    	imageSubscriber_ = n.subscribe("/image_raw", 1, &ClusterTracker::onImageReceived, this);
     	boxPublisher_ = n.advertise<std_msgs::Float32MultiArray>("/tracker/boxes", 1);
     	detectedMarkerPublisher_ = n.advertise<visualization_msgs::MarkerArray>("/tracker/markers/detect", 1);
     	predictedMarkerPublisher_ = n.advertise<visualization_msgs::MarkerArray>("/tracker/markers/predict", 1);
@@ -107,10 +107,10 @@ public:
     		cloudGround_ = PCLPointCloud::Ptr(new PCLPointCloud());
     	}
 
-        ROS_INFO("ObjectTracker: initialized");
+        ROS_INFO("ClusterTracker: initialized");
 	}
 
-	~ObjectTracker()
+	~ClusterTracker()
 	{
 		delete builder_;
 
@@ -315,7 +315,7 @@ private:
 		std::vector<visualization_msgs::Marker>::iterator mit = detectedMarkers_.markers.begin();
 		for (; cit != clusters.end(); ++cit)
 		{
-			// ROS_INFO("ObjectTracker: detected: points %d, depth %f, width %f, center %f %f %f, intensity %f, top %f, base %f, area %f",
+			// ROS_INFO("ClusterTracker: detected: points %d, depth %f, width %f, center %f %f %f, intensity %f, top %f, base %f, area %f",
 			// 		(*cit)->pointCount(), (*cit)->max()(2) - (*cit)->min()(2), 
 			// 		std::max((*cit)->max()(0) - (*cit)->min()(0), (*cit)->max()(1) - (*cit)->min()(1)),
 			// 		(*cit)->center()(0), (*cit)->center()(1), (*cit)->center()(2),
@@ -343,7 +343,7 @@ private:
 		mit = predictedMarkers_.markers.begin();
 		for (; bit != boxes.end(); ++bit)
 		{
-			// ROS_INFO("ObjectTracker: predicted: size %f %f %f, center %f %f %f",
+			// ROS_INFO("ClusterTracker: predicted: size %f %f %f, center %f %f %f",
 			// 		(*bit)->width, (*bit)->height, (*bit)->depth,
 			// 		(*bit)->px, (*bit)->py, (*bit)->pz);
 			mit->pose.position.x = (*bit)->px;
@@ -367,7 +367,7 @@ private:
         // publish markers
         detectedMarkerPublisher_.publish(detectedMarkers_);
         predictedMarkerPublisher_.publish(predictedMarkers_);
-        // ROS_INFO("ObjectTracker: published %d markers", markerCnt);
+        // ROS_INFO("ClusterTracker: published %d markers", markerCnt);
 	}
 
 	void publishBoxes(const std::list<Box*>& boxes, int numFrame)
@@ -411,7 +411,7 @@ private:
 
         // publish boxes
         boxPublisher_.publish(boxData_);
-        ROS_INFO("ObjectTracker: published %d boxes", boxCnt);
+        ROS_INFO("ClusterTracker: published %d boxes", boxCnt);
 	}
 
 private:
@@ -454,7 +454,7 @@ int main(int argc, char **argv)
 
     ros::NodeHandle n;
     std::string filterMode(argv[1]);
-    TeamKR::ObjectTracker filter(n, filterMode);
+    TeamKR::ClusterTracker filter(n, filterMode);
 
     ros::spin();
 

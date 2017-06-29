@@ -50,9 +50,17 @@ elif [ $FIND_CAR == 0 ] && [ $FIND_PED == 1 ]; then
 	OBJECT_MODE="ped"
 	echo "Find pedestrian"
 else
-	OBJECT_MODE="car_ped"
-	echo "Find car and pedestrian"
+	echo "ERROR: specify object to find"
+    usage
+    exit 1
 fi
 
-echo -e "\e[92mStart filter\e[0m"
-roslaunch object_tracker.launch object_mode:=$OBJECT_MODE
+# launch
+if [ $FIND_CAR == 1 ]; then
+    echo -e "\e[92mStart cluster tracker\e[0m"
+    roslaunch cluster_tracker.launch object_mode:=$OBJECT_MODE
+else
+    echo -e "\e[92mStart cluster tracker\e[0m"
+    roslaunch dl_tracker.launch object_mode:=$OBJECT_MODE
+fi
+
