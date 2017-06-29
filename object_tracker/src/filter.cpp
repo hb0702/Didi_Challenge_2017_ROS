@@ -84,7 +84,8 @@ void Filter::filterBySize(const std::list<Cluster*>& input, std::list<Cluster*>&
 			printf("area %f\n", (*cit)->area());
 		}
 
-		output.push_back(*cit);
+		Cluster* cluster = (*cit)->clone();
+		output.push_back(cluster);
 	}
 }
 

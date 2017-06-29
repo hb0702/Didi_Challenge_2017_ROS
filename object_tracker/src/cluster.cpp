@@ -20,6 +20,17 @@ Cluster::~Cluster()
 
 }
 
+Cluster* Cluster::clone(Cluster* src) const
+{
+	Cluster* target = new Cluster();
+	target->pointCount_ = src->pointCount_;
+	std::copy(src->points_.begin(), src->points_.end(), target->points_.begin());
+	target->min_ = src->min_;
+	target->max_ = src->max_;
+	target->maxIntensity_ = src->maxIntensity_;
+	target->top_ = src->top_;
+}
+
 void Cluster::add(const Vector3& point, int hitCount, value_type intensity, value_type minZ)
 {
 	points_.push_back(point);

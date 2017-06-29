@@ -14,6 +14,8 @@ public:
 	~Cluster();
 
 public:
+	Cluster* clone(Cluster* rhs) const;
+
 	void add(const Vector3& point, int hitCount, value_type intensity, value_type minZ);
 
 	const Vector3& min() const;
