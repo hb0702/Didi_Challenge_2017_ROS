@@ -18,24 +18,35 @@ class tracklet_writer:
 		self.output_folder = output_folder
 		output_filebase = os.path.splitext(os.path.basename(input_file))[0] + '.xml'
 		self.output_file = os.path.join(output_folder, output_filebase)
+
 		self.box_subscriber = rp.Subscriber("/tracker/boxes", Float32MultiArray, self.on_box_received)
+		self.image_subscriber = rp.Subscriber("/image_raw", Image, self.on_image_received)
+
+		self.boxes = []
 		self.collection = t.TrackletCollection()
-		
+		self.image_cnt = 0
+	
 	def on_box_received(self, data):
 		#rp.loginfo(rp.get_caller_id() + " Point received, %d", self.lidar_cnt)
 		self.boxes = []
-		box_arr = np.array(data.data).reshape(-1, 9)
+		box_arr = np.array(data.data).reshape(-1, 8)
 		for box in box_arr:
-			num_frame = box[0]
-			object_type = 'Pedestrian' if box[1] == 0 else 'Car'
-			l = box[5]
-			w = box[6]
-			h = box[7]
-			tracklet = t.Tracklet(object_type=object_type, l=l, w=w, h=h, first_frame=num_frame)
-			pos = {'tx':box[2], 'ty':box[3], 'tz':box[4], 'rx':0.0, 'ry':0.0, 'rz':box[8]}
-			tracklet.poses.append(pos)
-			self.collection.tracklets.append(tracklet)
+			self.boxes.append(box)
 
+	def on_image_received(self, data):
+		if len(self.boxes) > 0:
+			for box in self.boxes:
+				object_type = 'Pedestrian' if box[0] == 0 else 'Car'
+				l = box[4]
+				w = box[5]
+				h = box[6]
+				tracklet = t.Tracklet(object_type=object_type, l=l, w=w, h=h)
+				pos = {'tx':box[1], 'ty':box[2], 'tz':box[3], 'rx':0.0, 'ry':0.0, 'rz':box[7]}
+				tracklet.poses.append(pos)
+				tracklet.first_frame = self.image_cnt
+				self.collection.tracklets.append(tracklet)
+		self.image_cnt += 1
+	
 	def write_file(self):
 		for tracklet in self.collection.tracklets:
 			print("frameid: " + str(tracklet.first_frame))

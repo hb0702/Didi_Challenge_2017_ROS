@@ -5,7 +5,6 @@
 #include <ros/ros.h>
 #include <std_msgs/Float32MultiArray.h>
 #include <sensor_msgs/PointCloud2.h>
-#include <sensor_msgs/Image.h>
 #include <pcl/ModelCoefficients.h>
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
@@ -15,8 +14,6 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 
-#include <boost/thread/mutex.hpp>
-
 namespace TeamKR
 {
 
@@ -25,8 +22,7 @@ class ClusterTracker
 public:
 	ClusterTracker(ros::NodeHandle n, const std::string& mode)
 	{
-    	pointSubscriber_ = n.subscribe("/velodyne_points", 1, &ClusterTracker::onPointsReceived, this);
-    	imageSubscriber_ = n.subscribe("/image_raw", 1, &ClusterTracker::onImageReceived, this);
+    	subscriber_ = n.subscribe("/velodyne_points", 1, &ClusterTracker::onPointsReceived, this);
     	boxPublisher_ = n.advertise<std_msgs::Float32MultiArray>("/tracker/boxes", 1);
     	detectedMarkerPublisher_ = n.advertise<visualization_msgs::MarkerArray>("/tracker/markers/detect", 1);
     	predictedMarkerPublisher_ = n.advertise<visualization_msgs::MarkerArray>("/tracker/markers/predict", 1);
@@ -51,9 +47,6 @@ public:
 
 		// cluster filtering option
 		mode_ = mode;
-
-		// init frame count
-		frameCnt_ = 0;
 
 		// init markers
         for (int i = 0; i < MAX_MARKER_COUNT; i++)
@@ -166,92 +159,36 @@ private:
 		}
 
 		// filter by size
-		std::list<Cluster*> filtered;
-		filter_->filterBySize(clusters, filtered);
+		std::list<Cluster*> sizeFiltered;
+		filter_->filterBySize(clusters, sizeFiltered);
 
-		filteredClustersMutex_.lock();
-		// clear filtered clusters
-		if (!filteredClusters_.empty())
-		{
-			for (std::list<Cluster*>::iterator it = filteredClusters_.begin(); it != filteredClusters_.end(); ++it)
-			{
-				Cluster* cluster = *it;
-				delete cluster;
-			}
-			filteredClusters_.clear();
-		}
-		// copy
-		//std::copy(filtered.begin(), filtered.end(), filteredClusters_.begin());
-		for (std::list<Cluster*>::const_iterator it = filtered.begin(); it != filtered.end(); ++it)
-		{
-			Cluster* cluster = *it;
-			filteredClusters_.push_back(cluster);
-		}
-		filteredClustersMutex_.unlock();
-
-		// clear temp clusters
-		for (std::list<Cluster*>::iterator it = clusters.begin(); it != clusters.end(); ++it)
-		{
-			Cluster* cluster = *it;
-			delete cluster;
-		}
-	}
-
-	void onImageReceived(const sensor_msgs::Image::ConstPtr& msg)
-	{
+		// filter by velocity
 		int tsSec = msg->header.stamp.sec;
 		int tsNsec = msg->header.stamp.nsec;
 
-		std::list<Cluster*> filtered;
-		// deep copy filtered cluster and clear source
-		filteredClustersMutex_.lock();
-		if (!filteredClusters_.empty())
-		{
-			for (std::list<Cluster*>::const_iterator it = filteredClusters_.begin(); it != filteredClusters_.end(); ++it)
-			{
-				Cluster* cluster = *it;
-				Cluster* cloned = cluster->clone();
-				filtered.push_back(cloned);
-				delete cluster;
-			}
-			filteredClusters_.clear();
-		}
-		filteredClustersMutex_.unlock();
-
-		// filter by velocity
 		std::list<Box*> boxes;
-		filter_->filterByVelocity(filtered, tsSec, tsNsec, boxes);
+		filter_->filterByVelocity(sizeFiltered, tsSec, tsNsec, boxes);
 
-		// publish result
 		if (PUBLISH_MARKERS)
 		{
 			// publish detected clusters
-			publishMarkers(filtered, boxes);
+			publishMarkers(sizeFiltered, boxes);
 		}
+
 		if (!boxes.empty())
 		{
-			printf("pub boxes at %d\n", frameCnt_);
-			publishBoxes(boxes, frameCnt_);
+			publishBoxes(boxes);
 		}
 
-		// clear used clusters
-		if (!filtered.empty())
+		// release memory
+		for (std::list<Cluster*>::iterator it = clusters.begin(); it != clusters.end(); ++it)
 		{
-			for (std::list<Cluster*>::iterator it = filtered.begin(); it != filtered.end(); ++it)
-			{
-				delete *it;
-			}
-			filtered.clear();
+			delete *it;
 		}
-
-		// clear published boxes
 		for (std::list<Box*>::iterator it = boxes.begin(); it != boxes.end(); ++it)
 		{
 			delete *it;
 		}
-		boxes.clear();
-
-		frameCnt_++;
 	}
 
 	void markCar(const PCLPointVector& points, BitVector& filterBV) const
@@ -398,11 +335,10 @@ private:
         // publish markers
         detectedMarkerPublisher_.publish(detectedMarkers_);
         predictedMarkerPublisher_.publish(predictedMarkers_);
-        ROS_INFO("ClusterTracker: published %d markers", markerCnt);
-
+        // ROS_INFO("ClusterTracker: published %d markers", markerCnt);
 	}
 
-	void publishBoxes(const std::list<Box*>& boxes, int numFrame)
+	void publishBoxes(const std::list<Box*>& boxes)
 	{
 		float label = -1.0f;
 		if (mode_ == "car")
@@ -419,24 +355,23 @@ private:
 		std::list<Box*>::const_iterator bit = boxes.begin();
 		for (; bit != boxes.end(); ++bit)
 		{
-			boxData_.data.push_back(numFrame);// num frame 			0
-			boxData_.data.push_back(label); // label 				1
+			boxData_.data.push_back(label); // label 				0
 			// if (mode_ == "car")
 			{
-				boxData_.data.push_back((*bit)->px); // center		2
-				boxData_.data.push_back((*bit)->py); // center		3
-				boxData_.data.push_back((*bit)->pz); // center		4
+				boxData_.data.push_back((*bit)->px); // center		1
+				boxData_.data.push_back((*bit)->py); // center		2
+				boxData_.data.push_back((*bit)->pz); // center		3
 			}
 			// else if (mode_ == "ped")
 			// {
-			// 	boxData_.data.push_back((*bit)->topx); // center	2
-			// 	boxData_.data.push_back((*bit)->topy); // center	3
-			// 	boxData_.data.push_back((*bit)->topz); // center	4
+			// 	boxData_.data.push_back((*bit)->topx); // center	1
+			// 	boxData_.data.push_back((*bit)->topy); // center	2
+			// 	boxData_.data.push_back((*bit)->topz); // center	3
 			// }
-			boxData_.data.push_back((*bit)->width); // size 		5
-			boxData_.data.push_back((*bit)->height); // size 		6
-			boxData_.data.push_back((*bit)->depth); // size 		7
-			boxData_.data.push_back(0.0); // rotation 				8
+			boxData_.data.push_back((*bit)->width); // size 		4
+			boxData_.data.push_back((*bit)->height); // size 		5
+			boxData_.data.push_back((*bit)->depth); // size 		6
+			boxData_.data.push_back(0.0); // rotation 				7
 
 			++boxCnt;
 		}
@@ -447,16 +382,11 @@ private:
 	}
 
 private:
-	ros::Subscriber pointSubscriber_;
-	ros::Subscriber imageSubscriber_;
+	ros::Subscriber subscriber_;
 	ros::Publisher boxPublisher_;
 	ros::Publisher detectedMarkerPublisher_;
 	ros::Publisher predictedMarkerPublisher_;
-	// data
 	PCLPointCloud::Ptr cloud_;
-	std::list<Cluster*> filteredClusters_;
-	std_msgs::Float32MultiArray boxData_;
-	int frameCnt_;
 	// cluster builder
 	ClusterBuilder* builder_;
 	// velocity fiilter
@@ -468,14 +398,14 @@ private:
 	Vector3 carMax_;
 	// cluster filtering option
 	std::string mode_;
+	// box data
+	std_msgs::Float32MultiArray boxData_;
 	// marker array
 	visualization_msgs::MarkerArray detectedMarkers_;
 	visualization_msgs::MarkerArray predictedMarkers_;
 	// publish ground
 	ros::Publisher publisherGround_;
 	PCLPointCloud::Ptr cloudGround_;
-	// mutex
-	boost::mutex filteredClustersMutex_;
 };
 
 }
