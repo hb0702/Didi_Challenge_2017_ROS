@@ -99,7 +99,17 @@ catkin_python_setup()
 install(DIRECTORY include/${PROJECT_NAME}/ DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION})
 
 # Install python scripts
-# catkin_install_python(PROGRAMS scripts/tracklet.py scripts/tracklet_writer.py DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+catkin_install_python(
+  PROGRAMS
+    scripts/convert_to_full_view_panorama.py
+    scripts/dl_filter.py
+    scripts/dl_tracker.py
+    scripts/full_view_model.py
+    scripts/tracklet.py
+    scripts/tracklet_writer.py
+  DESTINATION
+    ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
 
 # Install model
-# install(FILES model/model.h5 DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+install(FILES model/fv_model_for_car_June_28_132.h5 DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})

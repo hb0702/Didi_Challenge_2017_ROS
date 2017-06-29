@@ -16,6 +16,7 @@
 * Install Eigen
 * Install PCL ROS
 * Install ROS BAG
+* Install scikit-learn
 * Install CUDA and CuDNN
 * Install tensorflow-gpu
 
