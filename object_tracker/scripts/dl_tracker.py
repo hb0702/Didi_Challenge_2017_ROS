@@ -140,6 +140,7 @@ class dl_tracker:
 			self.predicted_markers.markers.append(marker)
 
 	def on_points_received(self, data):
+		total_start = time.time()
 		#rp.loginfo("dl_tracker: process started")
 		# process points
 
@@ -149,14 +150,14 @@ class dl_tracker:
 		# print ("1", lidar[0])
 		# print ("1", lidar[1])
 		# print ("1", lidar[2])
-		# print (lidar.shape)		
+		# print (lidar.shape)
 		lidar = pointcloud2_to_lidar(data)
-		
+
 		detected_boxes = np.empty((0,8))
 
 		# predict
 		with self.graph.as_default():
-			detected_boxes = detect(self.model, lidar, multi_box=True)
+			detected_boxes = detect(self.model, lidar, multi_box=False)
 
 		# filter by velocity
 		ts_sec = data.header.stamp.secs;
@@ -167,9 +168,11 @@ class dl_tracker:
 		if PUBLISH_MARKERS:
 			if len(detected_boxes) > 0:			
 				self.publish_markers(detected_boxes, boxes)
-		
+
 		if len(boxes) > 0:			
 			self.publish_detected_boxes(boxes)
+
+		print ("total time: " + str(time.time() - total_start))
 
 	def publish_detected_boxes(self, box_info):
 		arr = Float32MultiArray()
@@ -199,27 +202,27 @@ class dl_tracker:
 			for i in range(num_boxes, MAX_MARKER_COUNT):
 				marker = self.detected_markers.markers[i]
 				marker.color.a = 0.0
-		for i in range(1):
-			info = box_info[i]
-			marker = self.predicted_markers.markers[i]
-			marker.pose.position.x = info[1]
-			marker.pose.position.y = info[2]
-			marker.pose.position.z = info[3]
-			marker.scale.x = info[4]
-			marker.scale.y = info[5]
-			marker.scale.z = info[6]
-			marker.pose.orientation.z = info[7]	
-			marker.color.a = 0.3
+		if len(box_info) > 0:
+			for i in range(1):
+				info = box_info[i]
+				marker = self.predicted_markers.markers[i]
+				marker.pose.position.x = info[1]
+				marker.pose.position.y = info[2]
+				marker.pose.position.z = info[3]
+				marker.scale.x = info[4]
+				marker.scale.y = info[5]
+				marker.scale.z = info[6]
+				marker.pose.orientation.z = info[7]	
+				marker.color.a = 0.3
 		# publish
 		self.detected_marker_publisher.publish(self.detected_markers)
 		self.predicted_marker_publisher.publish(self.predicted_markers)		
 		rp.loginfo("dl_tracker: published %d markers", num_markers)
-		print("dl_tracker: published %d markers", num_markers)
 
 
 def one_box_clustering(boxes, eps = 1, min_samples = 1):
 	# Extract the center from predicted boxes
-	box_centers = np.mean(boxes[:,1:4], axis = 1)
+	box_centers = boxes[:,1:4]
 	# Do clustering
 	db = DBSCAN(eps=eps, min_samples=min_samples).fit(box_centers)
 	labels = db.labels_
@@ -229,29 +232,28 @@ def one_box_clustering(boxes, eps = 1, min_samples = 1):
 	max_point_cluster = np.argmax(n_points)
 
 	index = (labels == max_point_cluster)
-	box = np.mean(boxes[index],axis = 0)
+	box = np.mean(boxes[index], axis = 0)
 	return np.expand_dims(box, 0)
 
 def multi_box_clustering(boxes, eps = 1, min_samples = 1):
 	# Extract the center from predicted boxes
-	box_centers = np.mean(boxes[:,1:4], axis = 1)
+	box_centers = boxes[:,1:4]
 	# Do clustering
 	db = DBSCAN(eps=eps, min_samples=min_samples).fit(box_centers)
 	labels = db.labels_
 
 	n_clusters = len(set(labels))
-	mul_clusters = np.array([np.mean(boxes[labels == i],axis = 0) for i in range(n_clusters)])
+	mul_clusters = np.array([np.mean(boxes[labels == i], axis = 0) for i in range(n_clusters)])
 
 	return mul_clusters
 
 def detect(model, lidar, cluster=True, seg_thres=0.5, multi_box=True):
-	test_view =  fv_cylindrical_projection_for_test(lidar, clustering=False)
+	test_view =  fv_cylindrical_projection_for_test(lidar)
 	view = test_view[:,:,[5,2]].reshape(1,16,320,2)
-
-	list_boxes = []
-
 	test_view_reshape = test_view.reshape(-1,6)
+
 	pred = model.predict(view)
+
 	pred = pred[0].reshape(-1,8)
 	thres_pred = pred[pred[:,0] > seg_thres]
 	thres_view = test_view_reshape[pred[:,0] > seg_thres]
@@ -262,7 +264,7 @@ def detect(model, lidar, cluster=True, seg_thres=0.5, multi_box=True):
 	boxes = np.zeros((num_boxes,8))
 
 	theta = thres_view[:,[3]]
-	phi = thres_view[:,[-1]]
+	phi = thres_pred[:,[-1]]
 
 	min = thres_view[:,:3] - rotation_v(theta, thres_pred[:,1:4])
 	max = thres_view[:,:3] - rotation_v(theta, thres_pred[:,4:7])
@@ -271,8 +273,8 @@ def detect(model, lidar, cluster=True, seg_thres=0.5, multi_box=True):
 	sinphi = np.sin(phi)
 	cosphi = np.cos(phi)
 	wvec = np.hstack((cosphi*dvec[:,[0]] + sinphi*dvec[:,[1]], -sinphi*dvec[:,[0]] + cosphi*dvec[:,[1]])) * cosphi
-	width = np.linalg.norm(wvec)
-	height = np.linalg.norm(dvec[:,:2] + wvec)
+	width = np.linalg.norm(wvec, axis=1).reshape(-1,1)
+	height = np.linalg.norm(dvec[:,:2] - wvec, axis=1).reshape(-1,1)
 	depth = dvec[:,[2]]
 	rz = np.arctan2(wvec[:,[1]], wvec[:,[0]])
 
@@ -282,9 +284,6 @@ def detect(model, lidar, cluster=True, seg_thres=0.5, multi_box=True):
 	boxes[:,[5]] = height
 	boxes[:,[6]] = depth
 	boxes[:,[7]] = rz
-	list_boxes.append(boxes)
-
-	boxes = np.concatenate(list_boxes, axis = 0)
 
 	if not cluster:
 		return boxes
