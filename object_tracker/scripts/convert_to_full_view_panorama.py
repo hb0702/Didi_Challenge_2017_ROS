@@ -355,7 +355,6 @@ def fv_cylindrical_projection_for_test(lidar,
         # remove near points
         lidar = lidar[d>=2]
 
-
     theta = np.arctan2(-y, x)
     phi = -np.arctan2(z, d)
        
@@ -367,9 +366,9 @@ def fv_cylindrical_projection_for_test(lidar,
     y_max = np.int16(np.ceil((ver_fov[1] - ver_fov[0])/v_res))
     
     view = np.zeros([y_max+1, x_max+1, 6],dtype=np.float32)
+
     if len(lidar) == 0:
         return view
-
 
     indices = np.logical_and( np.logical_and(x_view >= 0, x_view <= x_max), 
                           np.logical_and(y_view >= 0, y_view <= y_max)  )

@@ -5,8 +5,9 @@ import time
 import rospy as rp
 import numpy as np
 import math
+import struct
 
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs.point_cloud2 as pc2
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 from visualization_msgs.msg import Marker, MarkerArray
@@ -32,6 +33,46 @@ MAX_MARKER_COUNT = 30
 PUBLISH_MARKERS = True
 CAR_LABEL = 1
 
+
+# prefix to the names of dummy fields we add to get byte alignment correct. this needs to not
+# clash with any actual field names
+DUMMY_FIELD_PREFIX = '__'
+
+# mappings between PointField types and numpy types
+type_mappings = [(PointField.INT8, np.dtype('int8')), (PointField.UINT8, np.dtype('uint8')), (PointField.INT16, np.dtype('int16')),
+                 (PointField.UINT16, np.dtype('uint16')), (PointField.INT32, np.dtype('int32')), (PointField.UINT32, np.dtype('uint32')),
+                 (PointField.FLOAT32, np.dtype('float32')), (PointField.FLOAT64, np.dtype('float64'))]
+pftype_to_nptype = dict(type_mappings)
+nptype_to_pftype = dict((nptype, pftype) for pftype, nptype in type_mappings)
+
+# sizes (in bytes) of PointField types
+pftype_sizes = {PointField.INT8: 1, PointField.UINT8: 1, PointField.INT16: 2, PointField.UINT16: 2,
+                PointField.INT32: 4, PointField.UINT32: 4, PointField.FLOAT32: 4, PointField.FLOAT64: 8}
+
+def pointcloud2_to_dtype(cloud_msg):
+	offset = 0
+	np_dtype_list = []
+	for f in cloud_msg.fields:
+	    while offset < f.offset:
+	        np_dtype_list.append(('%s%d' % (DUMMY_FIELD_PREFIX, offset), np.uint8))
+	        offset += 1
+	    np_dtype_list.append((f.name, pftype_to_nptype[f.datatype]))
+	    offset += pftype_sizes[f.datatype]
+	while offset < cloud_msg.point_step:
+	    np_dtype_list.append(('%s%d' % (DUMMY_FIELD_PREFIX, offset), np.uint8))
+	    offset += 1
+	return np_dtype_list
+
+def pointcloud2_to_lidar(cloud_msg):
+	dtype_list = pointcloud2_to_dtype(cloud_msg)
+	cloud_arr = np.fromstring(cloud_msg.data, dtype_list)
+	cloud_arr = cloud_arr[
+	    [fname for fname, _type in dtype_list if not (fname[:len(DUMMY_FIELD_PREFIX)] == DUMMY_FIELD_PREFIX)]]	    
+	lidar = np.empty((len(cloud_arr),3))
+	lidar[:,0] = cloud_arr['x']
+	lidar[:,1] = cloud_arr['y']
+	lidar[:,2] = cloud_arr['z']
+	return lidar
 
 class dl_tracker:
 
@@ -101,13 +142,22 @@ class dl_tracker:
 	def on_points_received(self, data):
 		#rp.loginfo("dl_tracker: process started")
 		# process points
-		lidar = np.empty((0,3))
-		for p in pc2.read_points(data, skip_nans=True):
-			lidar = np.vstack((lidar, [p[0], p[1], p[2]]))
+
+		# lidar = np.empty((0,3))
+		# for p in pc2.read_points(data, skip_nans=True):
+		# 	lidar = np.vstack((lidar, [p[0], p[1], p[2]]))
+		# print ("1", lidar[0])
+		# print ("1", lidar[1])
+		# print ("1", lidar[2])
+		# print (lidar.shape)		
+		lidar = pointcloud2_to_lidar(data)
+		
 		detected_boxes = np.empty((0,8))
+
 		# predict
 		with self.graph.as_default():
-			_, detected_boxes = detect(self.model, lidar, multi_box=True)
+			detected_boxes = detect(self.model, lidar, multi_box=True)
+
 		# filter by velocity
 		ts_sec = data.header.stamp.secs;
 		ts_nsec = data.header.stamp.nsecs;
@@ -117,10 +167,9 @@ class dl_tracker:
 		if PUBLISH_MARKERS:
 			if len(detected_boxes) > 0:			
 				self.publish_markers(detected_boxes, boxes)
-
+		
 		if len(boxes) > 0:			
 			self.publish_detected_boxes(boxes)
-
 
 	def publish_detected_boxes(self, box_info):
 		arr = Float32MultiArray()
@@ -167,6 +216,7 @@ class dl_tracker:
 		rp.loginfo("dl_tracker: published %d markers", num_markers)
 		print("dl_tracker: published %d markers", num_markers)
 
+
 def one_box_clustering(boxes, eps = 1, min_samples = 1):
 	# Extract the center from predicted boxes
 	box_centers = np.mean(boxes[:,1:4], axis = 1)
@@ -195,11 +245,7 @@ def multi_box_clustering(boxes, eps = 1, min_samples = 1):
 	return mul_clusters
 
 def detect(model, lidar, cluster=True, seg_thres=0.5, multi_box=True):
-	start_time = time.time()
-	test_view =  fv_cylindrical_projection_for_test(lidar)
-	print("%s for projection", str(time.time() - start_time))
-	start_time = time.time()
-
+	test_view =  fv_cylindrical_projection_for_test(lidar, clustering=False)
 	view = test_view[:,:,[5,2]].reshape(1,16,320,2)
 
 	list_boxes = []
@@ -207,10 +253,6 @@ def detect(model, lidar, cluster=True, seg_thres=0.5, multi_box=True):
 	test_view_reshape = test_view.reshape(-1,6)
 	pred = model.predict(view)
 	pred = pred[0].reshape(-1,8)
-
-	print("%s for prediction", str(time.time() - start_time))
-	start_time = time.time()
-
 	thres_pred = pred[pred[:,0] > seg_thres]
 	thres_view = test_view_reshape[pred[:,0] > seg_thres]
 
@@ -219,56 +261,47 @@ def detect(model, lidar, cluster=True, seg_thres=0.5, multi_box=True):
 		return np.array([])
 	boxes = np.zeros((num_boxes,8))
 
-	theta = thres_view[:,3]
-	phi = thres_view[:,-1]
-	min = thres_view[:,:3] - rotation(theta, thres_pred[:,1:4])
-	max = thres_view[:,:3] - rotation(theta, thres_pred[:,4:7])
-	center = (min + max) * 0.5		
-	dvec = max - min
-	wvec = [(np.cos(phi)*dvec[:,0] + np.sin(phi)*dvec[:,1]), (-np.sin(phi)*dvec[:,0] + np.cos(phi)*dvec[:,1])] * np.cos(phi)
-	width = np.norm(wvec[:,:2])
-	height = np.norm(dvec[:,:2] + wvec[:,:2])
-	depth = dvec[:,2]
-	rz = np.arctan2(wvec[:,1], wvec[:,0])
+	theta = thres_view[:,[3]]
+	phi = thres_view[:,[-1]]
 
-	boxes[:0] = CAR_LABEL
+	min = thres_view[:,:3] - rotation_v(theta, thres_pred[:,1:4])
+	max = thres_view[:,:3] - rotation_v(theta, thres_pred[:,4:7])
+	center = (min + max) * 0.5
+	dvec = max - min
+	sinphi = np.sin(phi)
+	cosphi = np.cos(phi)
+	wvec = np.hstack((cosphi*dvec[:,[0]] + sinphi*dvec[:,[1]], -sinphi*dvec[:,[0]] + cosphi*dvec[:,[1]])) * cosphi
+	width = np.linalg.norm(wvec)
+	height = np.linalg.norm(dvec[:,:2] + wvec)
+	depth = dvec[:,[2]]
+	rz = np.arctan2(wvec[:,[1]], wvec[:,[0]])
+
+	boxes[:,[0]] = CAR_LABEL
 	boxes[:,1:4] = center
-	boxes[:,4] = width
-	boxes[:,5] = height
-	boxes[:,6] = depth
-	boxes[:,7] = rz
+	boxes[:,[4]] = width
+	boxes[:,[5]] = height
+	boxes[:,[6]] = depth
+	boxes[:,[7]] = rz
 	list_boxes.append(boxes)
 
 	boxes = np.concatenate(list_boxes, axis = 0)
-	print("%s for box generation", str(time.time() - start_time))
-	start_time = time.time()
 
 	if not cluster:
 		return boxes
 	elif multi_box:
 		mul_clusters = multi_box_clustering(boxes)
-		print("%s for multi box clustering", str(time.time() - start_time))
-		return boxes, mul_clusters
+		return mul_clusters
 	else:
 		one_cluster = one_box_clustering(boxes)
-		print("%s for one box clustering", str(time.time() - start_time))
-		return boxes, one_cluster
+		return one_cluster
 
-def box_infos(boxes):
-	if len(boxes) < 1:
-		return []
-	boxes = np.array(boxes)
-	print (boxes.shape)
-	center = (boxes[:,0,:] + boxes[:,6,:]) * 0.5
-	dvec = boxes[:,6,:] - boxes[:,0,:]	
-	size = np.abs(dvec)
-	rz = np.arctan2(dvec[:,1], dvec[:,0])
-	box_info = np.zeros((len(boxes),8))
-	box_info[:,0] = CAR_LABEL
-	box_info[:,1:4] = center
-	box_info[:,4:7] = size
-	box_info[:,7] = rz
-	return box_info
+def rotation_v(theta, points):
+	v = np.sin(theta)
+	u = np.cos(theta)
+	out = np.copy(points)
+	out[:,[0]] = u*points[:,[0]] + v*points[:,[1]]
+	out[:,[1]] = -v*points[:,[0]] + u*points[:,[1]]
+	return out
 
 def listen():
 	processor = dl_tracker()
