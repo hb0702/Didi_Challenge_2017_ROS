@@ -50,7 +50,7 @@ class dl_filter:
 					#filter with velocity
 					found = []
 					for box in boxes:
-						point = center(box)[:2]
+						point = box[1:3]
 						vel = self.velocity(point, time)
 						if norm(vel) < SPEED_LIMIT:
 							found.append(box)
@@ -76,7 +76,7 @@ class dl_filter:
 						else:
 							box = self.select_box(boxes)
 						output.append(box)
-						point = center(box)[:2]
+						point = box[1:3]
 						vel = velocity(point, time)
 						self.prev_vel = vel
 						self.prev_time = time
@@ -90,7 +90,7 @@ class dl_filter:
 				# filter with velocity
 				found = []
 				for box in boxes:
-					point = center(box)[:2]
+					point = box[1:3]
 					vel = self.velocity(point, time)
 					if norm(vel) < SPEED_LIMIT:
 						found.append(box)
@@ -109,7 +109,7 @@ class dl_filter:
 					else:
 						box = self.select_box(boxes)
 					output.append(box)
-					point = center(box)[:2]
+					point = box[1:3]
 					vel = velocity(point, time)
 					self.prev_vel = vel
 					self.prev_time = time
@@ -126,7 +126,7 @@ class dl_filter:
 		return output
 
 	def velocity(self, pos, time):
-		prev_pos = center(self.prev_box)[:2]
+		prev_pos = self.prev_box[1:3]
 		return float(pos - prev_pos) / (time - self.prev_time)
 
 	def select_box(self, boxes):
@@ -135,9 +135,6 @@ class dl_filter:
 
 def to_time(ts_sec, ts_nsec):
 	return 1E-9 * float(ts_nsec) + ts_sec
-
-def center(box):
-	return 0.5 * (box[0] + box[6])
 
 def norm(vec):
 	return np.sqrt(vec[0]*vec[0] + vec[1]*vec[1])

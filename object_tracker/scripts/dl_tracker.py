@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import sys
 import os
+import time
 import rospy as rp
 import numpy as np
 import math
@@ -113,15 +114,12 @@ class dl_tracker:
 		boxes = self.filter.filter_by_velocity(detected_boxes, ts_sec, ts_nsec)
 
 		print(len(detected_boxes))
-		det_box_info = box_infos(detected_boxes)
-		box_info = box_infos(boxes)
-
 		if PUBLISH_MARKERS:
-			if len(det_box_info) > 0:			
-				self.publish_markers(det_box_info, box_info)
+			if len(detected_boxes) > 0:			
+				self.publish_markers(detected_boxes, boxes)
 
-		if len(box_info) > 0:			
-			self.publish_detected_boxes(box_info)
+		if len(boxes) > 0:			
+			self.publish_detected_boxes(boxes)
 
 
 	def publish_detected_boxes(self, box_info):
@@ -171,7 +169,7 @@ class dl_tracker:
 
 def one_box_clustering(boxes, eps = 1, min_samples = 1):
 	# Extract the center from predicted boxes
-	box_centers = np.mean(boxes[:,[0,2],:2], axis = 1)
+	box_centers = np.mean(boxes[:,1:4], axis = 1)
 	# Do clustering
 	db = DBSCAN(eps=eps, min_samples=min_samples).fit(box_centers)
 	labels = db.labels_
@@ -186,7 +184,7 @@ def one_box_clustering(boxes, eps = 1, min_samples = 1):
 
 def multi_box_clustering(boxes, eps = 1, min_samples = 1):
 	# Extract the center from predicted boxes
-	box_centers = np.mean(boxes[:,[0,2],:2], axis = 1)
+	box_centers = np.mean(boxes[:,1:4], axis = 1)
 	# Do clustering
 	db = DBSCAN(eps=eps, min_samples=min_samples).fit(box_centers)
 	labels = db.labels_
@@ -197,7 +195,10 @@ def multi_box_clustering(boxes, eps = 1, min_samples = 1):
 	return mul_clusters
 
 def detect(model, lidar, cluster=True, seg_thres=0.5, multi_box=True):
+	start_time = time.time()
 	test_view =  fv_cylindrical_projection_for_test(lidar)
+	print("%s for projection", str(time.time() - start_time))
+	start_time = time.time()
 
 	view = test_view[:,:,[5,2]].reshape(1,16,320,2)
 
@@ -207,42 +208,50 @@ def detect(model, lidar, cluster=True, seg_thres=0.5, multi_box=True):
 	pred = model.predict(view)
 	pred = pred[0].reshape(-1,8)
 
+	print("%s for prediction", str(time.time() - start_time))
+	start_time = time.time()
+
 	thres_pred = pred[pred[:,0] > seg_thres]
 	thres_view = test_view_reshape[pred[:,0] > seg_thres]
 
 	num_boxes = len(thres_pred)
 	if num_boxes == 0:
-		return np.array([]), np.array([])
-	boxes = np.zeros((num_boxes,8,3))
+		return np.array([])
+	boxes = np.zeros((num_boxes,8))
 
-	for i in range(num_boxes):
-		boxes[i,0] = thres_view[i,:3] - rotation(thres_view[i,3],thres_pred[i,1:4])
-		boxes[i,6] = thres_view[i,:3] - rotation(thres_view[i,3],thres_pred[i,4:7])
+	theta = thres_view[:,3]
+	phi = thres_view[:,-1]
+	min = thres_view[:,:3] - rotation(theta, thres_pred[:,1:4])
+	max = thres_view[:,:3] - rotation(theta, thres_pred[:,4:7])
+	center = (min + max) * 0.5		
+	dvec = max - min
+	wvec = [(np.cos(phi)*dvec[:,0] + np.sin(phi)*dvec[:,1]), (-np.sin(phi)*dvec[:,0] + np.cos(phi)*dvec[:,1])] * np.cos(phi)
+	width = np.norm(wvec[:,:2])
+	height = np.norm(dvec[:,:2] + wvec[:,:2])
+	depth = dvec[:,2]
+	rz = np.arctan2(wvec[:,1], wvec[:,0])
 
-		boxes[i,2,:2] = boxes[i,6,:2]
-		boxes[i,2,2] = boxes[i,0,2]
-
-		phi = thres_pred[i,-1]
-
-		z = boxes[i,2] - boxes[i,0]
-		boxes[i,1,0] = (np.cos(phi)*z[0] + np.sin(phi)*z[1])*np.cos(phi) + boxes[i,0,0]
-		boxes[i,1,1] = (-np.sin(phi)*z[0] + np.cos(phi)*z[1])*np.cos(phi) + boxes[i,0,1]
-		boxes[i,1,2] = boxes[i,0,2]
-
-		boxes[i,3] = boxes[i,0] + boxes[i,2] - boxes[i,1]
-		boxes[i,4] = boxes[i,0] + boxes[i,6] - boxes[i,2]
-		boxes[i,5] = boxes[i,1] + boxes[i,4] - boxes[i,0]
-		boxes[i,7] = boxes[i,4] + boxes[i,6] - boxes[i,5]
+	boxes[:0] = CAR_LABEL
+	boxes[:,1:4] = center
+	boxes[:,4] = width
+	boxes[:,5] = height
+	boxes[:,6] = depth
+	boxes[:,7] = rz
 	list_boxes.append(boxes)
 
 	boxes = np.concatenate(list_boxes, axis = 0)
+	print("%s for box generation", str(time.time() - start_time))
+	start_time = time.time()
+
 	if not cluster:
 		return boxes
 	elif multi_box:
 		mul_clusters = multi_box_clustering(boxes)
+		print("%s for multi box clustering", str(time.time() - start_time))
 		return boxes, mul_clusters
 	else:
 		one_cluster = one_box_clustering(boxes)
+		print("%s for one box clustering", str(time.time() - start_time))
 		return boxes, one_cluster
 
 def box_infos(boxes):
