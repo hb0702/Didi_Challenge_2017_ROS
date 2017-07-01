@@ -117,4 +117,4 @@ catkin_install_python(
 )
 
 # Install model
-install(FILES model/fv_model_for_car_June_28_132.h5 DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+install(FILES model/fv_model_for_car_June_30_132_63.h5 DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})

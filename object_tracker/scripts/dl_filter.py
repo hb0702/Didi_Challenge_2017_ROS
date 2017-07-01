@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import numpy as np
 
-MAX_SPEED_GRAD = 4.17 # 20 km/h in m/s
+MAX_SPEED_GRAD = 5.56 # 20 km/h in m/s
 INIT_TIME = 1.0 # sec
 RESET_TIME = 1.0 # sec
 

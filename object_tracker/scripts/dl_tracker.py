@@ -38,7 +38,7 @@ class dl_tracker:
 	def __init__(self):
 		# model
 		dir_path = os.path.dirname(os.path.realpath(__file__))
-		self.model = load_model(os.path.join(dir_path, '../model/fv_model_for_car_June_28_132.h5'))
+		self.model = load_model(os.path.join(dir_path, '../model/fv_model_for_car_June_30_132_63.h5'))
 		# filter
 		self.filter = dl_filter()
 		# graph
@@ -215,17 +215,19 @@ def detect(model, lidar, clusterPoint=True, cluster=True, seg_thres=0.5, multi_b
 	theta = thres_view[:,[3]]
 	phi = thres_pred[:,[-1]]
 
-	min = thres_view[:,:3] - rotation_v(theta, thres_pred[:,1:4])
-	max = thres_view[:,:3] - rotation_v(theta, thres_pred[:,4:7])
+	min = thres_view[:,:3] - rotation_v(theta, thres_pred[:,1:4]) # 0: left top
+	max = thres_view[:,:3] - rotation_v(theta, thres_pred[:,4:7]) # 6: right bottom
 	center = (min + max) * 0.5
 	dvec = max - min
 	sinphi = np.sin(phi)
 	cosphi = np.cos(phi)
-	wvec = np.hstack((cosphi*dvec[:,[0]] + sinphi*dvec[:,[1]], -sinphi*dvec[:,[0]] + cosphi*dvec[:,[1]])) * cosphi
-	width = np.linalg.norm(wvec, axis=1).reshape(-1,1)
-	height = np.linalg.norm(dvec[:,:2] - wvec, axis=1).reshape(-1,1)
+	normdxy = np.linalg.norm(dvec[:,:2], axis=1) # distance between 0 and 2
+	normdxy = normdxy.reshape(-1, 1)
+	width = normdxy * abs(sinphi)
+	height = normdxy * abs(cosphi)
 	depth = dvec[:,[2]]
-	rz = np.arctan2(wvec[:,[1]], wvec[:,[0]])
+	ax = np.arctan2(dvec[:,[1]], dvec[:,[0]]) # angle from x axis to vector 2-0
+	rz = [0.5 * PI - phi[i] + ax[i] for i in range(len(ax))]
 
 	boxes[:,[0]] = CAR_LABEL
 	boxes[:,1:4] = center
