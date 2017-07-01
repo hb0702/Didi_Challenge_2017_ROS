@@ -29,10 +29,22 @@ public:
 		cloud_ = PCLPointCloud::Ptr(new PCLPointCloud());
 
 		// init cluster builder
-		builder_ = new ClusterBuilder(0.0, 0.0);
+		value_type resolution = 0.0;
+		value_type roiRad = 0.0;
+		if (mode == "car")
+		{
+			resolution = CAR_RESOLUTION;
+			roiRad = CAR_ROI_RADIUS;
+		}
+		else if (mode == "ped")
+		{
+			resolution = PEDESTRIAN_RESOLUTION;
+			roiRad = PEDESTRIAN_ROI_RADIUS;
+		}
+		builder_ = new ClusterBuilder(0.0, 0.0, resolution, roiRad);
 
 		// init point filter
-		float speedLimit = -1.0f;
+		float maxSpeedGrad = -1.0f;
 		float initTime = -1.0f;
 		float resetTime = -1.0f;
 			

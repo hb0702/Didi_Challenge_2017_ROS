@@ -8,13 +8,13 @@ Filter::Filter(const std::string& mode)
 	mode_ = mode;
 	if (mode == "car")
 	{
-		speedLimit_ = CAR_SPEED_LIMIT;
+		maxSpeedGrad_ = CAR_MAX_SPEED_GRAD;
 		initTime_ = CAR_FILTER_INIT_TIME;
 		resetTime_ = CAR_FILTER_RESET_TIME;
 	}
 	else if (mode == "ped")
 	{
-		speedLimit_ = PEDESTRIAN_SPEED_LIMIT;
+		maxSpeedGrad_ = PEDESTRIAN_MAX_SPEED_GRAD;
 		initTime_ = PEDESTRIAN_FILTER_INIT_TIME;
 		resetTime_ = PEDESTRIAN_FILTER_RESET_TIME;
 	}
@@ -143,7 +143,8 @@ void Filter::filterByVelocity(const std::list<Cluster*>& input, int tsSec, int t
 				{
 					Vector2 point((*it)->center()(0), (*it)->center()(1));
 					Vector2 vel = velocity(point, time);
-					if (vel.norm() < speedLimit_)
+					Vector2 dvel = vel - prevVel_;
+					if (dvel.norm() < maxSpeedGrad_)
 					{
 						found.push_back(*it);
 					}
@@ -208,7 +209,8 @@ void Filter::filterByVelocity(const std::list<Cluster*>& input, int tsSec, int t
 			{
 				Vector2 point((*it)->center()(0), (*it)->center()(1));
 				Vector2 vel = velocity(point, time);
-				if (vel.norm() < speedLimit_)
+				Vector2 dvel = vel - prevVel_;
+				if (dvel.norm() < maxSpeedGrad_)
 				{
 					found.push_back(*it);
 				}

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import numpy as np
 
-SPEED_LIMIT = 16.67 # 60 km/h in m/s
+MAX_SPEED_GRAD = 4.17 # 20 km/h in m/s
 INIT_TIME = 1.0 # sec
 RESET_TIME = 1.0 # sec
 
@@ -52,7 +52,7 @@ class dl_filter:
 					for box in boxes:
 						point = box[1:3]
 						vel = self.velocity(point, time)
-						if norm(vel) < SPEED_LIMIT:
+						if norm(vel - prev_vel) < MAX_SPEED_GRAD:
 							found.append(box)
 
 					if len(found) < 1:
@@ -92,7 +92,7 @@ class dl_filter:
 				for box in boxes:
 					point = box[1:3]
 					vel = self.velocity(point, time)
-					if norm(vel) < SPEED_LIMIT:
+					if norm(vel - prev_vel) < MAX_SPEED_GRAD:
 						found.append(box)
 
 				if len(found) < 1:

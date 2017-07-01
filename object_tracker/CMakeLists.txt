@@ -73,6 +73,10 @@ include_directories(
 add_executable(bag_player
   src/bag_player.cpp
 )
+add_executable(point_filter
+  src/cluster.cpp
+  src/point_filter.cpp
+)
 add_executable(cluster_tracker
   src/cluster.cpp
   src/filter.cpp
@@ -81,6 +85,7 @@ add_executable(cluster_tracker
 
 # This will link executables to the appropriate libraries
 target_link_libraries(bag_player ${catkin_LIBRARIES})
+target_link_libraries(point_filter ${catkin_LIBRARIES})
 target_link_libraries(cluster_tracker ${catkin_LIBRARIES})
 
 # set_target_properties(${PROJECT_NAME}_node PROPERTIES OUTPUT_NAME node PREFIX "")

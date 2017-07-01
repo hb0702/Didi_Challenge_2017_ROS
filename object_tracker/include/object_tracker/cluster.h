@@ -9,12 +9,12 @@ namespace TeamKR
 class Cluster
 {
 public:
-	Cluster();
+	Cluster(value_type resolution);
 
 	~Cluster();
 
 public:
-	void add(const Vector3& point, int hitCount, value_type intensity, value_type minZ);
+	void add(const Vector3& point, int hitCount, value_type totalZ, value_type minZ);
 
 	const Vector3& min() const;
 
@@ -26,16 +26,17 @@ public:
 
 	int pointCount() const;
 
-	value_type maxIntensity() const;
+	value_type meanZ() const;
 
 	value_type area() const;
 
 private:
+	value_type resolution_;
 	int pointCount_;
 	std::list<Vector3> points_;
 	Vector3 min_;
 	Vector3 max_;
-	value_type maxIntensity_;
+	value_type totalZ_;
 	Vector3 top_;
 };
 
@@ -66,7 +67,7 @@ public:
 			topx = value_type(0);
 			topy = value_type(0);
 			base = value_type(1000.0);
-			intensity = value_type(0);
+			totalz = value_type(0);
 		}
 
 		void clear()
@@ -76,7 +77,7 @@ public:
 			topx = value_type(0);
 			topy = value_type(0);
 			base = value_type(1000.0);
-			intensity = value_type(0);
+			totalz = value_type(0);
 		}
 
 		int hit;
@@ -84,11 +85,11 @@ public:
 		value_type topx;
 		value_type topy;
 		value_type base;
-		value_type intensity;
+		value_type totalz;
 	};
 
 public:
-	ClusterBuilder(value_type centerX, value_type centerY);
+	ClusterBuilder(value_type centerX, value_type centerY, value_type resolution, value_type roiRadius);
 
 	~ClusterBuilder();
 
@@ -108,6 +109,7 @@ private:
 private:
 	value_type centerX_;
 	value_type centerY_;
+	value_type resolution_;
 	value_type originX_;
 	value_type originY_;
 	value_type baseZ_;

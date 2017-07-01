@@ -9,7 +9,7 @@ import struct
 
 from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs.point_cloud2 as pc2
-from std_msgs.msg import Float32MultiArray, MultiArrayDimension
+from std_msgs.msg import Float32MultiArray, Float64MultiArray, MultiArrayDimension
 from visualization_msgs.msg import Marker, MarkerArray
 
 from sklearn.cluster import DBSCAN
@@ -33,47 +33,6 @@ MAX_MARKER_COUNT = 30
 PUBLISH_MARKERS = True
 CAR_LABEL = 1
 
-
-# prefix to the names of dummy fields we add to get byte alignment correct. this needs to not
-# clash with any actual field names
-DUMMY_FIELD_PREFIX = '__'
-
-# mappings between PointField types and numpy types
-type_mappings = [(PointField.INT8, np.dtype('int8')), (PointField.UINT8, np.dtype('uint8')), (PointField.INT16, np.dtype('int16')),
-                 (PointField.UINT16, np.dtype('uint16')), (PointField.INT32, np.dtype('int32')), (PointField.UINT32, np.dtype('uint32')),
-                 (PointField.FLOAT32, np.dtype('float32')), (PointField.FLOAT64, np.dtype('float64'))]
-pftype_to_nptype = dict(type_mappings)
-nptype_to_pftype = dict((nptype, pftype) for pftype, nptype in type_mappings)
-
-# sizes (in bytes) of PointField types
-pftype_sizes = {PointField.INT8: 1, PointField.UINT8: 1, PointField.INT16: 2, PointField.UINT16: 2,
-                PointField.INT32: 4, PointField.UINT32: 4, PointField.FLOAT32: 4, PointField.FLOAT64: 8}
-
-def pointcloud2_to_dtype(cloud_msg):
-	offset = 0
-	np_dtype_list = []
-	for f in cloud_msg.fields:
-	    while offset < f.offset:
-	        np_dtype_list.append(('%s%d' % (DUMMY_FIELD_PREFIX, offset), np.uint8))
-	        offset += 1
-	    np_dtype_list.append((f.name, pftype_to_nptype[f.datatype]))
-	    offset += pftype_sizes[f.datatype]
-	while offset < cloud_msg.point_step:
-	    np_dtype_list.append(('%s%d' % (DUMMY_FIELD_PREFIX, offset), np.uint8))
-	    offset += 1
-	return np_dtype_list
-
-def pointcloud2_to_lidar(cloud_msg):
-	dtype_list = pointcloud2_to_dtype(cloud_msg)
-	cloud_arr = np.fromstring(cloud_msg.data, dtype_list)
-	cloud_arr = cloud_arr[
-	    [fname for fname, _type in dtype_list if not (fname[:len(DUMMY_FIELD_PREFIX)] == DUMMY_FIELD_PREFIX)]]	    
-	lidar = np.empty((len(cloud_arr),3))
-	lidar[:,0] = cloud_arr['x']
-	lidar[:,1] = cloud_arr['y']
-	lidar[:,2] = cloud_arr['z']
-	return lidar
-
 class dl_tracker:
 
 	def __init__(self):
@@ -90,7 +49,7 @@ class dl_tracker:
 		print "dl_tracker: initialized"
 
 	def initialize_communication(self):
-		self.subscriber = rp.Subscriber("/velodyne_points", PointCloud2, self.on_points_received, queue_size=1)
+		self.subscriber = rp.Subscriber("/filtered_points", Float64MultiArray, self.on_points_received, queue_size=1)
 		self.detected_marker_publisher = rp.Publisher("/tracker/markers/detect", MarkerArray, queue_size=1)
 		self.predicted_marker_publisher = rp.Publisher("/tracker/markers/predict", MarkerArray, queue_size=1)
 		self.box_publisher = rp.Publisher("/tracker/boxes", Float32MultiArray, queue_size=1)
@@ -141,30 +100,20 @@ class dl_tracker:
 
 	def on_points_received(self, data):
 		total_start = time.time()
-		#rp.loginfo("dl_tracker: process started")
-		# process points
 
-		# lidar = np.empty((0,3))
-		# for p in pc2.read_points(data, skip_nans=True):
-		# 	lidar = np.vstack((lidar, [p[0], p[1], p[2]]))
-		# print ("1", lidar[0])
-		# print ("1", lidar[1])
-		# print ("1", lidar[2])
-		# print (lidar.shape)
-		lidar = pointcloud2_to_lidar(data)
+		ts_sec = int(data.data[0])
+		ts_nsec = int(data.data[1])
+		lidar = np.asarray(data.data[2:]).reshape(-1, 3)
 
 		detected_boxes = np.empty((0,8))
 
 		# predict
 		with self.graph.as_default():
-			detected_boxes = detect(self.model, lidar, multi_box=False)
+			detected_boxes = detect(self.model, lidar, clusterPoint=False, multi_box=False)
 
 		# filter by velocity
-		ts_sec = data.header.stamp.secs;
-		ts_nsec = data.header.stamp.nsecs;
 		boxes = self.filter.filter_by_velocity(detected_boxes, ts_sec, ts_nsec)
 
-		print(len(detected_boxes))
 		if PUBLISH_MARKERS:
 			if len(detected_boxes) > 0:			
 				self.publish_markers(detected_boxes, boxes)
@@ -247,8 +196,8 @@ def multi_box_clustering(boxes, eps = 1, min_samples = 1):
 
 	return mul_clusters
 
-def detect(model, lidar, cluster=True, seg_thres=0.5, multi_box=True):
-	test_view =  fv_cylindrical_projection_for_test(lidar)
+def detect(model, lidar, clusterPoint=True, cluster=True, seg_thres=0.5, multi_box=True):
+	test_view =  fv_cylindrical_projection_for_test(lidar, clustering=clusterPoint)
 	view = test_view[:,:,[5,2]].reshape(1,16,320,2)
 	test_view_reshape = test_view.reshape(-1,6)
 

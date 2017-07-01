@@ -29,7 +29,7 @@ class tracklet_writer:
 	def on_box_received(self, data):
 		#rp.loginfo(rp.get_caller_id() + " Point received, %d", self.lidar_cnt)
 		self.boxes = []
-		box_arr = np.array(data.data).reshape(-1, 8)
+		box_arr = np.asarray(data.data).reshape(-1, 8)
 		for box in box_arr:
 			self.boxes.append(box)
 

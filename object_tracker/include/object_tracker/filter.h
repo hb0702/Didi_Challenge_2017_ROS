@@ -67,7 +67,7 @@ private:
 
 private:
 	std::string mode_;
-	value_type speedLimit_;
+	value_type maxSpeedGrad_;
 	double initTime_;
 	double resetTime_;
 	// status
