@@ -110,7 +110,7 @@ class dl_tracker:
 
 		# predict
 		with self.graph.as_default():
-			detected_boxes = detect(self.model, lidar, clusterPoint=False, seg_thres=0.05, multi_box=False)
+			detected_boxes = detect(self.model, lidar, clusterPoint=False, seg_thres=0.15, multi_box=False)
 
 		# filter by velocity
 		boxes = self.filter.filter_by_velocity(detected_boxes, ts_sec, ts_nsec)
