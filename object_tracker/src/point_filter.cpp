@@ -239,7 +239,7 @@ private:
 					if (getGood)
 					{
 						output.push_back(*cit);
-						printf("meanz: %f, %f %f\n", meanZ, (*cit)->min()[0], (*cit)->min()[1]);
+						// printf("meanz: %f, %f %f\n", meanZ, (*cit)->min()[0], (*cit)->min()[1]);
 					}
 					else
 					{

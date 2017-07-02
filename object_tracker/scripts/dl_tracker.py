@@ -39,6 +39,7 @@ class dl_tracker:
 		# model
 		dir_path = os.path.dirname(os.path.realpath(__file__))
 		self.model = load_model(os.path.join(dir_path, '../model/fv_model_for_car_June_30_132_63.h5'))
+		#self.model = load_model(os.path.join(dir_path, '../model/fv_July_01_18.h5'))
 		# filter
 		self.filter = dl_filter()
 		# graph
@@ -109,7 +110,7 @@ class dl_tracker:
 
 		# predict
 		with self.graph.as_default():
-			detected_boxes = detect(self.model, lidar, clusterPoint=False, multi_box=False)
+			detected_boxes = detect(self.model, lidar, clusterPoint=False, seg_thres=0.25, multi_box=False)
 
 		# filter by velocity
 		boxes = self.filter.filter_by_velocity(detected_boxes, ts_sec, ts_nsec)
