@@ -81,7 +81,7 @@ void Filter::filterBySize(const std::list<Cluster*>& input, std::list<Cluster*>&
 			{
 				continue;
 			}
-			printf("area %f\n", (*cit)->area());
+			// printf("area %f\n", (*cit)->area());
 		}
 
 		output.push_back(*cit);
@@ -310,7 +310,7 @@ Cluster* Filter::selectCluster(const std::list<Cluster*>& input)
 			cluster = *it;
 		}
 	}
-	printf("!!!!selected point %d\n", cluster->pointCount());
+	// printf("!!!!selected point %d\n", cluster->pointCount());
 
 	return cluster;
 }

@@ -181,6 +181,17 @@ private:
 		std::list<Box*> boxes;
 		filter_->filterByVelocity(sizeFiltered, tsSec, tsNsec, boxes);
 
+		// compensate z val
+		if (mode_ == "ped")
+		{
+			for (std::list<Box*>::iterator it = boxes.begin(); it != boxes.end(); ++it)
+			{
+				value_type top = (*it)->pz + 0.5 * (*it)->depth;
+				(*it)->pz = top - 0.5 * PEDESTRIAN_ACTUAL_DEPTH;
+				(*it)->depth = PEDESTRIAN_ACTUAL_DEPTH;
+			}
+		}
+
 		if (PUBLISH_MARKERS)
 		{
 			// publish detected clusters
