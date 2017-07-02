@@ -35,8 +35,8 @@ const float PEDESTRIAN_MAX_DEPTH = 2.0f;
 const float PEDESTRIAN_MAX_BASE = GROUND_Z + 0.9f;
 const float PEDESTRIAN_MAX_AREA = 0.45f;
 const float PEDESTRIAN_MAX_SPEED_GRAD = 2.78f; // 10 km/h in m/s
-const float PEDESTRIAN_FILTER_INIT_TIME = 1.0f; // sec
-const float PEDESTRIAN_FILTER_RESET_TIME = 1.0f; // sec
+const float PEDESTRIAN_FILTER_INIT_TIME = 0.5f; // sec
+const float PEDESTRIAN_FILTER_RESET_TIME = 0.5f; // sec
 
 const int CAR_LABEL = 1;
 const float CAR_ROI_RADIUS = 30.0f;
@@ -51,8 +51,8 @@ const float CAR_MAX_DEPTH = 1.9f;
 const float CAR_MAX_BASE = GROUND_Z + 1.0f;
 const float CAR_MAX_AREA = 4.8f * 2.0f;
 const float CAR_MAX_SPEED_GRAD = 5.56f; // 20 km/h in m/s
-const float CAR_FILTER_INIT_TIME = 1.0f; // sec
-const float CAR_FILTER_RESET_TIME = 1.0f; // sec
+const float CAR_FILTER_INIT_TIME = 0.5f; // sec
+const float CAR_FILTER_RESET_TIME = 0.5f; // sec
 
 const bool USE_RANSAC_GROUND_FITTING = true;
 const bool USE_GOOD_CLUSTER_ONLY = true;
