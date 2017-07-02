@@ -19,6 +19,7 @@ class dl_filter:
 
 	def filter_by_velocity(self, boxes, ts_sec, ts_nsec):
 		time = to_time(ts_sec, ts_nsec)
+		from_prev = False
 		output = []
 		if len(boxes) < 1: # no box
 			if not self.initialized:
@@ -29,6 +30,7 @@ class dl_filter:
 				dp = self.prev_vel * (time - self.prev_time)
 				box[:,:,0] += dp[0]
 				box[:,:,1] += dp[1]
+				from_prev = True
 				output.append(box)
 		else: # filtered box exists
 			if (not self.initialized) or (not self.valid):
@@ -68,6 +70,7 @@ class dl_filter:
 							box[:,:,0] += dp[0]
 							box[:,:,1] += dp[1]
 							output.append(box)
+							from_prev = True
 					else: # found
 						# save current info
 						box = []
@@ -101,6 +104,7 @@ class dl_filter:
 					box[:,:,0] += dp[0]
 					box[:,:,1] += dp[1]
 					output.append(box)
+					from_prev = True
 				else: # found
 					# save current info
 					box = []
@@ -123,7 +127,7 @@ class dl_filter:
 					self.reset_start_time = -1
 					# start initialization
 					self.filter_by_velocity(boxes, ts_sec, ts_nsec)
-		return output
+		return output, from_prev
 
 	def velocity(self, pos, time):
 		prev_pos = self.prev_box[1:3]

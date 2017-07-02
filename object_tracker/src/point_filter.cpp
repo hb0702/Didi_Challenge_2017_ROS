@@ -106,49 +106,57 @@ private:
 
 		if (USE_GOOD_CLUSTER_ONLY)
 		{
-			std::list<Cluster*> filter;
-			filterClusters(clusters, filter, true);
-
-			BitVector goodPointBV(pointCount, 0);
+			std::list<Cluster*> filtered;
+			filterClusters(clusters, filtered, true);
 
 			// mark good clusters
-			markGoodClusters(points, filter, goodPointBV);
+			std::vector<int> clusterIndices(pointCount, -1);
+			markGoodClusters(points, filtered, badPointBV, clusterIndices);
 
-			// publish filtered points
+			// add cluster info
+			output.data.push_back(filtered.size());
+			for (std::list<Cluster*>::const_iterator cit = filtered.begin(); cit != filtered.end(); ++cit)
+			{
+				output.data.push_back((*cit)->center()[0]);
+				output.data.push_back((*cit)->center()[1]);
+			}
+
+			// add filtered points to output
 			PCLPointVector::const_iterator pit = points.begin();
-			BitVector::iterator bit = goodPointBV.begin();
+			std::vector<int>::iterator bit = clusterIndices.begin();
 			for (; pit != points.end(); ++pit, ++bit)
 			{
-				if (*bit != 0)
+				if (*bit > -1)
 				{
 					output.data.push_back(pit->x);
 					output.data.push_back(pit->y);
 					output.data.push_back(pit->z);
+					output.data.push_back(*bit);
 				}
 			}
 		}
-		else
-		{
-			// get bad clusters
-			std::list<Cluster*> filter;
-			filterClusters(clusters, filter, false);
+		// else
+		// {
+		// 	// get bad clusters
+		// 	std::list<Cluster*> filter;
+		// 	filterClusters(clusters, filter, false);
 
-			// mark bad clusters
-			markBadClusters(points, filter, badPointBV);
+		// 	// mark bad clusters
+		// 	markBadClusters(points, filter, badPointBV);
 
-			// publish filtered points
-			PCLPointVector::const_iterator pit = points.begin();
-			BitVector::iterator bit = badPointBV.begin();
-			for (; pit != points.end(); ++pit, ++bit)
-			{
-				if (*bit == 0)
-				{
-					output.data.push_back(pit->x);
-					output.data.push_back(pit->y);
-					output.data.push_back(pit->z);
-				}
-			}
-		}
+		// 	// publish filtered points
+		// 	PCLPointVector::const_iterator pit = points.begin();
+		// 	BitVector::iterator bit = badPointBV.begin();
+		// 	for (; pit != points.end(); ++pit, ++bit)
+		// 	{
+		// 		if (*bit == 0)
+		// 		{
+		// 			output.data.push_back(pit->x);
+		// 			output.data.push_back(pit->y);
+		// 			output.data.push_back(pit->z);
+		// 		}
+		// 	}
+		// }
 
 		publisher_.publish(output);
 
@@ -274,19 +282,26 @@ private:
 		}
 	}
 
-	void markGoodClusters(const PCLPointVector& points, const std::list<Cluster*> filter, BitVector& filterBV) const
+	void markGoodClusters(const PCLPointVector& points, const std::list<Cluster*> filter, const BitVector& badPointBV, std::vector<int>& indices) const
 	{
 		PCLPointVector::const_iterator pit = points.begin();
-		BitVector::iterator bit = filterBV.begin();		
-		for (; pit != points.end(); ++pit, ++bit)
+		BitVector::const_iterator bit = badPointBV.begin();
+		std::vector<int>::iterator iit = indices.begin();		
+		for (; pit != points.end(); ++pit, ++bit, ++iit)
 		{
-			for (std::list<Cluster*>::const_iterator cit = filter.begin(); cit != filter.end(); ++cit)
+			if (*bit != 0)
+			{
+				continue;
+			}
+
+			int ci = 0;
+			for (std::list<Cluster*>::const_iterator cit = filter.begin(); cit != filter.end(); ++cit, ++ci)
 			{
 				if (pit->x > (*cit)->min()(0) && pit->x < (*cit)->max()(0)
 					&& pit->y > (*cit)->min()(1) && pit->y < (*cit)->max()(1)
 					&& pit->z > (*cit)->min()(2) && pit->z < (*cit)->max()(2))
 				{
-					*bit = 1;
+					*iit = ci;
 					break;
 				}
 			}
