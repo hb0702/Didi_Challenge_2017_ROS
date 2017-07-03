@@ -129,7 +129,7 @@ class dl_tracker:
 		else:			
 			for box in boxes:
 				#print "box", box
-				cbox = correct_predicted_box(box, lidar_with_idx, cluster_xy, nb_d=32)
+				cbox = 
 				#print "cbox", cbox
 				corrected_boxes.append(cbox)
 
@@ -201,84 +201,69 @@ def distance(p,q):
 def length(v):
     return distance(v,0)
 
-def fit_box(lidar, nb_d = 128):    
+def rotate(angle, lidar):
+    return np.array([rotation(angle, lidar[i]) for i in range(len(lidar))])
+
+def fit_box(lidar, nb_d = 128):
+    
     lidar_2d = lidar[:,:2]
     angle = np.pi/(nb_d*2)
     center = (np.max(lidar_2d, axis = 0) + np.min(lidar_2d, axis = 0))/2
     center = np.expand_dims(center,0)
     #rotated
     lidar_2d = lidar_2d - center
-    rotated_lidar = [rotation_v(angle*i, lidar_2d) for i in range(nb_d)]
+    rotated_lidar = [rotate(angle*i, lidar_2d) for i in range(nb_d)]
         
     max_lidars = np.array([np.max(rotated_lidar[i],axis = 0) for i in range(nb_d)])
     min_lidars = np.array([np.min(rotated_lidar[i],axis = 0) for i in range(nb_d)])
-
+    #print(max_lidars.shape, min_lidars.shape)
+    #max_lidars = np.max(rotated_lidar, axis = 1)
+    #min_lidars = np.min(rotated_lidar, axis = 1)
     range_lidars = max_lidars - min_lidars
     areas = range_lidars[:,0]*range_lidars[:,1]
-
+    #print(areas.shape)
+    
     arg_min = np.argmin(areas)
     
     rp0, rp2 = min_lidars[arg_min], max_lidars[arg_min]
     rp1, rp3 = np.array([rp2[0], rp0[1]]), np.array([rp0[0], rp2[1]])
-
-    box_2d = np.array([rp0,rp1,rp2,rp3])
-    box_2d = rotation_v(-angle*arg_min, box_2d) + center
-    return box_2d
+    
+    box_2d = np.array([rotation(-angle*arg_min, p) for p in [rp0,rp1,rp2,rp3]]) + center
+    
+    #box = -1.5*np.ones((1,8,3))
+    #box[0,:4,:2] = box_2d
+    #box[0,4:,:2] = box_2d
+    #box[0,4:,2] = np.max(lidar[:,2])
+    return box_2d#, box
 
 def move_box(box, side):
     '''
     box: 2d box of shape (4,2)
     side: array of shape (2,2)
     '''
+
+    #print(box)
+    #print(side)
     v_box = box[1] - box[0]
     v_side = side[1] - side[0]
     angle_offset = np.arctan2(v_side[1], v_side[0]) - np.arctan2(v_box[1], v_box[0])
+    #print(np.arctan2(v_side[1], v_side[0]), np.arctan2(v_box[1], v_box[0]))
+    #print(angle_offset)
+    
     rot_box = np.array([rotation(-angle_offset, box[i] - box[0]) + box[0] for i in range(4)])
+    #print('rot_box')
+    #print(rot_box)
+    
     pos_offset = side[0] - box[0]
-    correct_box = rot_box + np.expand_dims(pos_offset, axis = 0)     
+    correct_box = rot_box + np.expand_dims(pos_offset, axis = 0)
+     
     return correct_box
 
-def to_box2d(box_info):
-	center = box_info[1:3]
-	w = box_info[4] * 0.5
-	h = box_info[5] * 0.5
-	r = box_info[7]
-	box = np.array([[-w,h],[-w,-h],[w,-h],[w,h]])
-	box = rotation_v(r, box) + np.expand_dims(center, axis=0)
-	return box
-
-def normalize_angle(angle):
-	while angle > 2*PI:
-		angle -= 2*PI
-	while angle < 0:
-		angle += 2*PI
-	return angle
-
-def move_box_info(box_info, box):
-	center = np.mean(box, axis=0)
-	miny_idx = np.argmin(box[:,1])
-	wv = box[(miny_idx+1)%4] - box[miny_idx]	
-	hv = box[(miny_idx+2)%4] - box[(miny_idx+1)%4]
-	rz = normalize_angle(np.arctan2(wv[1], wv[0]))
-	# # find nearest new rz from the old rz
-	# rz_candidate = np.array([nrz, normalize_angle(nrz + PI_2), normalize_angle(nrz + PI), normalize_angle(nrz + 3*PI_2)])	
-	# orz = normalize_angle(box_info[7])
-	# rz = rz_candidate[np.argmin(np.abs(rz_candidate - orz))]
-	width = length(wv)
-	height = length(hv)	
-	box_info[1] = center[0]
-	box_info[2] = center[1]
-	box_info[4] = width
-	box_info[5] = height
-	box_info[7] = rz
-	return box_info
-
-def correct_box_info(predbox_info, fitbox):
+def correct_box(predbox, fitbox):
     '''
     box, fitbox: 2d box of shape (4,2)
     Move box to the right position based on position of fitbox 
     '''
-    predbox = to_box2d(predbox_info)
     pred_sides = np.array([distance(predbox[0], predbox[1]), distance(predbox[1], predbox[2])])
     min_pred_side = np.min(pred_sides)
     min_pred_ind = np.argmin(pred_sides)
@@ -306,105 +291,162 @@ def correct_box_info(predbox_info, fitbox):
     box_distances = np.array([length(box[i]) for i in range(4)])
     min_ind = np.argmin(box_distances)
     if min_ind == min_fit_ind:
-    	moved_info = move_box_info(predbox_info, box)
-        return moved_info
+        return box
     else:
         indices = [(min_pred_ind + i + 2)%4 for i in range(4)]
         box = np.array([predbox[i] for i in indices])
         box = move_box(box, side)
-        moved_info = move_box_info(predbox_info, box)
-        return moved_info
+        return box
+    
+def correct_box_3d(predbox, fitbox, min_z = -1.5):
+    '''
+    box: 3d box of shape (8,3)
+    fitbox: 2d box of shape (4,2)
+    Move box to the right position based on position of fitbox 
+    '''
+    box2d = correct_box(predbox[:4,:2], fitbox)
+    box = min_z*np.ones_like(predbox)
+    box[:4,:2] = box2d
+    box[4:,:2] = box2d
+    box[4:,2] = abs(predbox[4,2] - predbox[0,2])+min_z
+    return box
 
-def correct_predicted_box(box_info, points_with_idx, cluster_xy, nb_d):
-    nb_clusters = len(cluster_xy)
+def correct_predicted_box(clusters, labels, boxes):
+    list_clusters = list(set(labels))
+    nb_clusters = len(list_clusters)
     if nb_clusters == 0:
-        return box_info
+        return np.array([])
+#     if nb_clusters == 1:
+#         assert len(boxes) == 1, 'nb_clusters == 1 but len(boxes) = {0}'.format(len(boxes))
+#         fitbox = fit_box(clusters)
+#         correctbox = correct_box_3d(boxes[0], fitbox)
+#         correctbox = np.expand_dims(correctbox, axis = 0)
+#         return correctbox
     else:
-    	box_xy = box_info[1:3]
-    	distances = [distance(box_xy, cluster_xy[i]) for i in range(nb_clusters)]
-    	ind = np.argmin(distances)
-    	cluster_points = points_with_idx[points_with_idx[:,3] == ind]
-    	if (len(cluster_points) == 0):
-    		return box_info
-    	fitbox = fit_box(cluster_points, nb_d)
-    	correctbox = correct_box_info(box_info, fitbox)
-    	return correctbox
+        correctboxes = np.zeros((len(boxes), 8, 3))
+        list_of_cluster = [clusters[labels == list_clusters[i]] for i in range(nb_clusters)]
+        center_clusters = [np.mean(list_of_cluster[i][:,:2], axis = 0) for i in range(nb_clusters)]
+        for b in range(len(boxes)):
+            box = boxes[b]
+            center_box = np.mean(box[:4,:2], axis = 0)
+            distances = [distance(center_box, center_clusters[i]) for i in range(nb_clusters)]
+            ind = np.argmin(distances)
+            nearest_cluster = list_of_cluster[ind]
+            
+            fitbox = fit_box(nearest_cluster)
+            correctbox = correct_box_3d(box, fitbox)
+            
+            correctboxes[b] = correctbox
+        return correctboxes
 
 def one_box_clustering(boxes, eps = 1, min_samples = 1):
-	# Extract the center from predicted boxes
-	box_centers = boxes[:,1:4]
-	# Do clustering
-	db = DBSCAN(eps=eps, min_samples=min_samples).fit(box_centers)
-	labels = db.labels_
+    # Extract the center from predicted boxes
+    box_centers = np.mean(boxes[:,[0,2],:2], axis = 1)
+    # Do clustering
+    db = DBSCAN(eps=eps, min_samples=min_samples).fit(box_centers)
+    labels = db.labels_
+       
+    n_clusters = len(set(labels))
+    n_points = [np.sum([labels == i]) for i in range(n_clusters) ]
+    max_point_cluster = np.argmax(n_points)
+    
+    index = (labels == max_point_cluster)
+    box = np.mean(boxes[index],axis = 0)
+    return np.expand_dims(box, 0)
 
-	n_clusters = len(set(labels))
-	n_points = [np.sum([labels == i]) for i in range(n_clusters) ]
-	max_point_cluster = np.argmax(n_points)
-
-	index = (labels == max_point_cluster)
-	box = np.mean(boxes[index], axis = 0)
-	return np.expand_dims(box, 0)
 
 def multi_box_clustering(boxes, eps = 1, min_samples = 1):
-	# Extract the center from predicted boxes
-	box_centers = boxes[:,1:4]
-	# Do clustering
-	db = DBSCAN(eps=eps, min_samples=min_samples).fit(box_centers)
-	labels = db.labels_
+    # Extract the center from predicted boxes
+    box_centers = np.mean(boxes[:,[0,2],:2], axis = 1)
+    # Do clustering
+    db = DBSCAN(eps=eps, min_samples=min_samples).fit(box_centers)
+    labels = db.labels_
+       
+    n_clusters = len(set(labels))
+    mul_clusters = np.array([np.mean(boxes[labels == i],axis = 0) for i in range(n_clusters)])
+    
+    return mul_clusters
 
-	n_clusters = len(set(labels))
-	mul_clusters = np.array([np.mean(boxes[labels == i], axis = 0) for i in range(n_clusters)])
+def predict_and_correct(model,lidar, cluster = True, seg_thres=0.5, multi_box = True):
+    
+    test_view, clusters, labels =  fv_cylindrical_projection_for_test(lidar)
+    
+    view = test_view[:,:,[5,2]].reshape(1,16,320,2)
+    
+    list_boxes = []
 
-	return mul_clusters
+    test_view_reshape = test_view.reshape(-1,6)
+    pred = model.predict(view)
+    pred = pred[0].reshape(-1,8)
+    
+    thres_pred = pred[pred[:,0] > seg_thres]
+    thres_view = test_view_reshape[pred[:,0] > seg_thres]
+    
+    
+    num_boxes = len(thres_pred)
+    if num_boxes == 0:
+        return np.array([]), np.array([])
+    boxes = np.zeros((num_boxes,8,3))
+    
+    for i in range(num_boxes):
+        boxes[i,0] = thres_view[i,:3] - rotation(thres_view[i,3],thres_pred[i,1:4])
+        boxes[i,6] = thres_view[i,:3] - rotation(thres_view[i,3],thres_pred[i,4:7])
 
-def detect(model, lidar, clusterPoint=True, cluster=True, seg_thres=0.5, multi_box=True):
-	test_view =  fv_cylindrical_projection_for_test(lidar, clustering=clusterPoint)
-	view = test_view[:,:,[5,2]].reshape(1,16,320,2)
-	test_view_reshape = test_view.reshape(-1,6)
+        boxes[i,2,:2] = boxes[i,6,:2]
+        boxes[i,2,2] = boxes[i,0,2]
 
-	pred = model.predict(view)
+        phi = thres_pred[i,-1]
 
-	pred = pred[0].reshape(-1,8)
-	thres_pred = pred[pred[:,0] > seg_thres]
-	thres_view = test_view_reshape[pred[:,0] > seg_thres]
+        z = boxes[i,2] - boxes[i,0]
+        boxes[i,1,0] = (np.cos(phi)*z[0] + np.sin(phi)*z[1])*np.cos(phi) + boxes[i,0,0]
+        boxes[i,1,1] = (-np.sin(phi)*z[0] + np.cos(phi)*z[1])*np.cos(phi) + boxes[i,0,1]
+        boxes[i,1,2] = boxes[i,0,2]
 
-	num_boxes = len(thres_pred)
-	if num_boxes == 0:
-		return np.array([])
-	boxes = np.zeros((num_boxes,8))
+        boxes[i,3] = boxes[i,0] + boxes[i,2] - boxes[i,1]
+        boxes[i,4] = boxes[i,0] + boxes[i,6] - boxes[i,2]
+        boxes[i,5] = boxes[i,1] + boxes[i,4] - boxes[i,0]
+        boxes[i,7] = boxes[i,4] + boxes[i,6] - boxes[i,5]
+        
+    list_boxes.append(boxes)
 
-	theta = thres_view[:,[3]]
-	phi = thres_pred[:,[-1]]
+    boxes = np.concatenate(list_boxes, axis = 0)
+    if not cluster:
+        return boxes
+    
+    elif multi_box:
+        mul_boxes = multi_box_clustering(boxes)
+        mul_boxes = correct_predicted_box(clusters, labels, mul_boxes)
+        return mul_boxes
+    else:
+        one_box = one_box_clustering(boxes)
+        one_box = correct_predicted_box(clusters, labels, one_box)[0]
+        return one_box
 
-	min = thres_view[:,:3] - rotation_v(theta, thres_pred[:,1:4]) # 0: left top
-	max = thres_view[:,:3] - rotation_v(theta, thres_pred[:,4:7]) # 6: right bottom
-	center = (min + max) * 0.5
-	dvec = max - min
-	sinphi = np.sin(phi)
-	cosphi = np.cos(phi)
-	normdxy = np.linalg.norm(dvec[:,:2], axis=1) # distance between 0 and 2
-	normdxy = normdxy.reshape(-1, 1)
-	width = normdxy * abs(sinphi)
-	height = normdxy * abs(cosphi)
-	depth = dvec[:,[2]]
-	ax = np.arctan2(dvec[:,[1]], dvec[:,[0]]) # angle from x axis to vector 2-0
-	rz = [0.5 * PI - phi[i] + ax[i] for i in range(len(ax))]
+def normalize_angle(angle):
+	while angle > 2*PI:
+		angle -= 2*PI
+	while angle < 0:
+		angle += 2*PI
+	return angle
 
-	boxes[:,[0]] = CAR_LABEL
-	boxes[:,1:4] = center
-	boxes[:,[4]] = width
-	boxes[:,[5]] = height
-	boxes[:,[6]] = depth
-	boxes[:,[7]] = rz
-
-	if not cluster:
-		return boxes
-	elif multi_box:
-		mul_clusters = multi_box_clustering(boxes)
-		return mul_clusters
-	else:
-		one_cluster = one_box_clustering(boxes)
-		return one_cluster
+def move_box_info(box_info, box):
+	center = np.mean(box, axis=0)
+	miny_idx = np.argmin(box[:,1])
+	wv = box[(miny_idx+1)%4] - box[miny_idx]	
+	hv = box[(miny_idx+2)%4] - box[(miny_idx+1)%4]
+	rz = normalize_angle(np.arctan2(wv[1], wv[0]))
+	# # find nearest new rz from the old rz
+	# rz_candidate = np.array([nrz, normalize_angle(nrz + PI_2), normalize_angle(nrz + PI), normalize_angle(nrz + 3*PI_2)])	
+	# orz = normalize_angle(box_info[7])
+	# rz = rz_candidate[np.argmin(np.abs(rz_candidate - orz))]
+	width = length(wv)
+	height = length(hv)	
+	box_info[1] = center[0]
+	box_info[2] = center[1]
+	box_info[4] = width
+	box_info[5] = height
+	box_info[7] = rz
+	return box_info
 
 def listen():
 	processor = dl_tracker()
