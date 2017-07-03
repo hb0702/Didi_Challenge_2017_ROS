@@ -123,38 +123,59 @@ private:
 			ec.extract(cluster_indices);
 
 			// get point coordinate with cluster index
-			int ci = 0;
-			std::vector<value_type> pointInfo;
+			int numClusters = 0;
 			std::list<value_type> clusterX, clusterY;
+			std::list<std::vector<value_type>> pointInfoList;
 			for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin(); it != cluster_indices.end(); ++it)
 			{
+				std::vector<value_type> pointInfo;
 				value_type cx = 0, cy = 0;
+				int np = 0;
+
+				// filter clusters
 				value_type minx = MAX_VALUE, maxx = -MAX_VALUE, miny = MAX_VALUE, maxy = -MAX_VALUE, minz = MAX_VALUE, maxz = -MAX_VALUE;
-				int numPoints = 0;
+				value_type width = 0, height = 0, depth = 0;				
 				for (std::vector<int>::const_iterator iit = it->indices.begin(); iit != it->indices.end(); ++iit)
 				{
 					PCLPoint point = filtered_->points[*iit];
-					
+					if (minx > point.x) { minx = point.x; }
+					if (maxx < point.x) { maxx = point.x; }
+					if (miny > point.y) { miny = point.y; }
+					if (maxy < point.y) { maxy = point.y; }
+					if (minz > point.z) { minz = point.z; }
+					if (maxz < point.z) { maxz = point.z; }
+
 					pointInfo.push_back(point.x);
 					pointInfo.push_back(point.y);
 					pointInfo.push_back(point.z);
-					pointInfo.push_back(ci);
-
+					pointInfo.push_back(numClusters);
 					cx += point.x;
 					cy += point.y;
-
-					++numPoints;
+					np++;
 				}
-				cx /= numPoints;
-				cy /= numPoints;
+
+				width = maxx - minx;
+				height = maxy - miny;
+				depth = maxz - minz;
+				if (width < CAR_MIN_WIDTH || width > CAR_MAX_WIDTH
+					|| height < CAR_MIN_WIDTH || height > CAR_MAX_WIDTH
+					|| depth < CAR_MIN_DEPTH || depth > CAR_MAX_DEPTH
+					|| it->indices.size() < CAR_MIN_POINT_COUNT)
+				{
+					continue;
+				}
+
+				// save info
+				numClusters++;
+				cx /= np;
+				cy /= np;
 				clusterX.push_back(cx);
 				clusterY.push_back(cy);
-
-				++ci;
+				pointInfoList.push_back(pointInfo);
 			}
 
 			// add num cluster
-			output.data.push_back(ci);
+			output.data.push_back(numClusters);
 
 			// add cluster x,y
 			{
@@ -168,7 +189,10 @@ private:
 			}
 
 			// add points with cluster index
-			std::copy(pointInfo.begin(), pointInfo.end(), std::back_inserter(output.data));
+			for (std::list<std::vector<value_type>>::const_iterator it = pointInfoList.begin(); it != pointInfoList.end(); ++it)
+			{
+				std::copy(pointInfo.begin(), pointInfo.end(), std::back_inserter(output.data));	
+			}
 		}
 
 		publisher_.publish(output);		
