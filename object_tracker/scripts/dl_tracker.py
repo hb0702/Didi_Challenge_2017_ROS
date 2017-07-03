@@ -118,7 +118,7 @@ class dl_tracker:
 
 		# predict
 		with self.graph.as_default():
-			detected_boxes = predict_and_correct(model, lidar, clusterPoint=False, seg_thres=0.5)
+			detected_boxes = predict_and_correct(model, lidar, clusterPoint=False, seg_thres=0.5, nb_d=32)
 
 		# filter by velocity
 		boxes, from_prev = self.filter.filter_by_velocity(detected_boxes, ts_sec, ts_nsec)
@@ -236,6 +236,25 @@ def fit_box(lidar, nb_d = 128):
     #box[0,4:,2] = np.max(lidar[:,2])
     return box_2d#, box
 
+def fit_box_zero(lidar, nb_d = 128):
+    
+    lidar_2d = lidar[:,:2]
+    angle = np.pi/(nb_d*2)
+
+    rotated_lidar = [rotate(angle*i, lidar_2d) for i in range(nb_d)]        
+    max_lidars = np.max(rotated_lidar, axis=1)
+    min_lidars = np.min(rotated_lidar, axis=1)
+    range_lidars = max_lidars - min_lidars
+    areas = range_lidars[:,0]*range_lidars[:,1]
+    
+    arg_min = np.argmin(areas)
+    
+    rp0, rp2 = min_lidars[arg_min], max_lidars[arg_min]
+    rp1, rp3 = np.array([rp2[0], rp0[1]]), np.array([rp0[0], rp2[1]])
+    
+    box_2d = np.array([rotation(-angle*arg_min, p) for p in [rp0,rp1,rp2,rp3]])
+    return box_2d
+
 def move_box(box, side):
     '''
     box: 2d box of shape (4,2)
@@ -316,7 +335,7 @@ def correct_box_3d(predbox, fitbox, min_z = -1.5):
     # box[:,2] = predbox[:,2]
     return box
 
-def correct_predicted_box(clusters, labels, boxes):
+def correct_predicted_box(clusters, labels, boxes, nb_d=128):
     list_clusters = list(set(labels))
     nb_clusters = len(list_clusters)
     if nb_clusters == 0:
@@ -338,7 +357,7 @@ def correct_predicted_box(clusters, labels, boxes):
             ind = np.argmin(distances)
             nearest_cluster = list_of_cluster[ind]
             
-            fitbox = fit_box(nearest_cluster)
+            fitbox = fit_box(nearest_cluster, nb_d)
             correctbox = correct_box_3d(box, fitbox)
             
             correctboxes[b] = correctbox
@@ -371,7 +390,7 @@ def multi_box_clustering(boxes, eps = 1, min_samples = 1):
     
     return mul_clusters
 
-def predict_and_correct(model, lidar, clusterPoint=True, cluster=True, seg_thres=0.5):
+def predict_and_correct(model, lidar, clusterPoint=True, cluster=True, seg_thres=0.5, nb_d=128):
     
     test_view, clusters, labels =  fv_cylindrical_projection_for_test(lidar, clustering=clusterPoint)
     
@@ -418,7 +437,7 @@ def predict_and_correct(model, lidar, clusterPoint=True, cluster=True, seg_thres
         return boxes    
     else:
         one_box = one_box_clustering(boxes)
-        one_box = correct_predicted_box(clusters, labels, one_box)
+        one_box = correct_predicted_box(clusters, labels, one_box, nb_d)
         one_box_info = np.array([to_box_info(ob) for ob in one_box])
         return one_box
 
