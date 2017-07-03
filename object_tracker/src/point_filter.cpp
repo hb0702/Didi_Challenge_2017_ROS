@@ -74,6 +74,7 @@ private:
 		output.data.push_back(tsNsec);
 
 		sensor_msgs::PointCloud2 response = *msg;
+		response.fields[3].name = "intensity";
 		pcl::fromROSMsg(response, *cloud_);
 		PCLPointVector points = cloud_->points;
 		size_t pointCount = points.size();
@@ -91,111 +92,67 @@ private:
 		markGround_RANSAC(badPointBV);
 		markGround_simple(points, badPointBV);
 
-		// get filtered cloud
-		filtered_->points.clear();
+		// cluster
+		std::list<Cluster*> clusters;
+		delete builder_;
+		builder_ = new ClusterBuilder(0.0, 0.0, CAR_RESOLUTION, CAR_ROI_RADIUS);
+		builder_->run(points, badPointBV, clusters);
+		size_t clusterCount = clusters.size();
+		if (clusterCount == 0u)
 		{
-			PCLPointVector::const_iterator pit = points.begin();
-			BitVector::const_iterator bit = badPointBV.begin();
-			for (; pit != points.end(); ++pit, ++bit)
-			{
-				if (*bit == 0)
-				{
-					filtered_->points.push_back(*pit);
-				}
-			}
+			// publish empty points
+			publisher_.publish(output);
+			return;
 		}
 
-		// add point count
-		if (filtered_->points.size() != 0)
+		std::list<Cluster*> filtered;
+		filterClusters(clusters, filtered, true);
+
+		int numCluster = 0;
+		std::vector<value_type> clusterX, clusterY;
+		std::vector<value_type> pointInfo;
+		for (std::list<Cluster*>::const_iterator cit = filtered.begin(); cit != filtered.end(); ++cit)
 		{
-			// euclidian clustering
-			pcl::search::KdTree<PCLPoint>::Ptr tree (new pcl::search::KdTree<PCLPoint>);
-			tree->setInputCloud(filtered_);
-
-			std::vector<pcl::PointIndices> cluster_indices;
-
-			pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-			ec.setClusterTolerance(CAR_RESOLUTION);
-			ec.setMinClusterSize(CAR_MIN_POINT_COUNT);
-			ec.setMaxClusterSize(10000);
-			ec.setSearchMethod(tree);
-			ec.setInputCloud(filtered_);
-			ec.extract(cluster_indices);
-
-			// get point coordinate with cluster index
-			int numClusters = 0;
-			std::list<value_type> clusterX, clusterY;
-			std::list<std::vector<value_type> > pointInfoList;
-			for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin(); it != cluster_indices.end(); ++it)
+			if ((*cit)->pointCount() == 0)
 			{
-				std::vector<value_type> pointInfo;
-				value_type cx = 0, cy = 0;
-				int np = 0;
-
-				// filter clusters
-				value_type minx = MAX_VALUE, maxx = -MAX_VALUE, miny = MAX_VALUE, maxy = -MAX_VALUE, minz = MAX_VALUE, maxz = -MAX_VALUE;
-				value_type width = 0, height = 0, depth = 0;				
-				for (std::vector<int>::const_iterator iit = it->indices.begin(); iit != it->indices.end(); ++iit)
-				{
-					PCLPoint point = filtered_->points[*iit];
-					if (minx > point.x) { minx = point.x; }
-					if (maxx < point.x) { maxx = point.x; }
-					if (miny > point.y) { miny = point.y; }
-					if (maxy < point.y) { maxy = point.y; }
-					if (minz > point.z) { minz = point.z; }
-					if (maxz < point.z) { maxz = point.z; }
-
-					pointInfo.push_back(point.x);
-					pointInfo.push_back(point.y);
-					pointInfo.push_back(point.z);
-					pointInfo.push_back(numClusters);
-					cx += point.x;
-					cy += point.y;
-					np++;
-				}
-
-				width = maxx - minx;
-				height = maxy - miny;
-				depth = maxz - minz;
-				if (width < CAR_MIN_WIDTH || width > CAR_MAX_WIDTH
-					|| height < CAR_MIN_WIDTH || height > CAR_MAX_WIDTH
-					|| depth < CAR_MIN_DEPTH || depth > CAR_MAX_DEPTH
-					|| it->indices.size() < CAR_MIN_POINT_COUNT)
-				{
-					continue;
-				}
-
-				// save info
-				numClusters++;
-				cx /= np;
-				cy /= np;
-				clusterX.push_back(cx);
-				clusterY.push_back(cy);
-				pointInfoList.push_back(pointInfo);
+				continue;
 			}
 
-			// add num cluster
-			output.data.push_back(numClusters);
-
-			// add cluster x,y
+			for (PCLPointVector::const_iterator pit = (*cit)->pclPoints().begin(); pit != (*cit)->pclPoints().end(); ++pit)
 			{
-				std::list<value_type>::const_iterator xit = clusterX.begin();
-				std::list<value_type>::const_iterator yit = clusterY.begin();
-				for (; xit != clusterX.end(); ++xit, ++yit)
-				{
-					output.data.push_back(*xit);
-					output.data.push_back(*yit);
-				}
+				pointInfo.push_back(pit->x);
+				pointInfo.push_back(pit->y);
+				pointInfo.push_back(pit->z);
+				pointInfo.push_back(numCluster);
 			}
 
-			// add points with cluster index
-			for (std::list<std::vector<value_type> >::const_iterator it = pointInfoList.begin(); it != pointInfoList.end(); ++it)
-			{
-				std::copy((*it).begin(), (*it).end(), std::back_inserter(output.data));	
-			}
+			clusterX.push_back((*cit)->center()[0]);
+			clusterY.push_back((*cit)->center()[1]);
+
+			numCluster++;
 		}
 
-		publisher_.publish(output);		
+		output.data.push_back(numCluster);
+		std::vector<value_type>::const_iterator xit = clusterX.begin();
+		std::vector<value_type>::const_iterator yit = clusterY.begin();
+		for (; xit != clusterX.end(); ++xit)
+		{
+			output.data.push_back(*xit);
+			output.data.push_back(*yit);
+		}
+
+		for (std::vector<value_type>::const_iterator it = pointInfo.begin(); it != pointInfo.end(); ++it)
+		{
+			output.data.push_back(*it);
+		}
+
+		publisher_.publish(output);
+
+		// release memory
+		for (std::list<Cluster*>::iterator it = clusters.begin(); it != clusters.end(); ++it)
+		{
+			delete *it;
+		}
 	}
 
 	void markCar(const PCLPointVector& points, BitVector& filterBV) const
@@ -245,12 +202,15 @@ private:
 		BitVector::iterator bit = filterBV.begin();
 		for (; pit != points.end(); ++pit, ++bit)
 		{
-			if (pit->z < maxGround_)
+			if (pit->x < -CAR_ROI_RADIUS || pit->x > CAR_ROI_RADIUS
+				|| pit->y < -CAR_ROI_RADIUS || pit->y > CAR_ROI_RADIUS
+				|| pit->z < maxGround_)
 			{
 				*bit = 1;
 			}
 		}
 	}
+
 
 	void filterClusters(const std::list<Cluster*>& input, std::list<Cluster*>& output, bool getGood) const
 	{
@@ -267,8 +227,8 @@ private:
 				if (maxWidth < CAR_MAX_WIDTH
 					&& maxWidth > CAR_MIN_WIDTH
 					&& top - base > CAR_MIN_DEPTH
-					//&& meanZ > GROUND_Z + CAR_MIN_MEANZ
-					//&& meanZ < GROUND_Z + CAR_MAX_MEANZ
+					&& meanZ > GROUND_Z + CAR_MIN_MEANZ
+					&& meanZ < GROUND_Z + CAR_MAX_MEANZ
 					&& top < GROUND_Z + CAR_MAX_DEPTH
 					//&& base < CAR_MAX_BASE
 					&& (*cit)->pointCount() > CAR_MIN_POINT_COUNT

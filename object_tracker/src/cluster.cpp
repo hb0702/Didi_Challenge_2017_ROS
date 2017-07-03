@@ -21,7 +21,7 @@ Cluster::~Cluster()
 
 }
 
-void Cluster::add(const Vector3& point, int hitCount, value_type totalZ, value_type minZ)
+void Cluster::add(const Vector3& point, int hitCount, value_type totalZ, value_type minZ, const PCLPointVector& hitPoints)
 {
 	points_.push_back(point);
 
@@ -57,6 +57,11 @@ void Cluster::add(const Vector3& point, int hitCount, value_type totalZ, value_t
 	if (min_(2) > minZ - 0.5 * resolution_)
 	{
 		min_(2) = minZ - 0.5 * resolution_;
+	}
+
+	for (PCLPointVector::const_iterator it = hitPoints.begin(); it != hitPoints.end(); ++it)
+	{
+		pclPoints_.push_back(*it);
 	}
 }
 
@@ -139,6 +144,11 @@ value_type Cluster::area() const
 	delete[] hitmap;
 
 	return ar;
+}
+
+const PCLPointVector& Cluster::pclPoints() const
+{
+	return pclPoints_;
 }
 
 
@@ -306,6 +316,8 @@ void ClusterBuilder::hit(const PCLPoint& point)
 	{
 		value.base = point.z;
 	}
+
+	value.points.push_back(point);
 }
 
 int ClusterBuilder::hitCount(int ix, int iy) const
@@ -327,7 +339,7 @@ void ClusterBuilder::addPoint(int ix, int iy, Cluster* cluster)
 	int hitCount = value.hit;
 	value_type totalz = value.totalz;
 	value_type base = value.base;
-	cluster->add(cellPoint, hitCount, totalz, base);
+	cluster->add(cellPoint, hitCount, totalz, base, value.points);
 }
 
 }

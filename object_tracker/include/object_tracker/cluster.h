@@ -14,7 +14,7 @@ public:
 	~Cluster();
 
 public:
-	void add(const Vector3& point, int hitCount, value_type totalZ, value_type minZ);
+	void add(const Vector3& point, int hitCount, value_type totalZ, value_type minZ, const PCLPointVector& hitPoints);
 
 	const Vector3& min() const;
 
@@ -30,6 +30,8 @@ public:
 
 	value_type area() const;
 
+	const PCLPointVector& pclPoints() const;
+
 private:
 	value_type resolution_;
 	int pointCount_;
@@ -38,6 +40,7 @@ private:
 	Vector3 max_;
 	value_type totalZ_;
 	Vector3 top_;
+	PCLPointVector pclPoints_;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,6 +71,7 @@ public:
 			topy = value_type(0);
 			base = value_type(1000.0);
 			totalz = value_type(0);
+			points.clear();
 		}
 
 		void clear()
@@ -78,6 +82,7 @@ public:
 			topy = value_type(0);
 			base = value_type(1000.0);
 			totalz = value_type(0);
+			points.clear();
 		}
 
 		int hit;
@@ -86,6 +91,7 @@ public:
 		value_type topy;
 		value_type base;
 		value_type totalz;
+		PCLPointVector points;
 	};
 
 public:

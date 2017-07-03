@@ -39,13 +39,13 @@ const float PEDESTRIAN_FILTER_INIT_TIME = 0.5f; // sec
 const float PEDESTRIAN_FILTER_RESET_TIME = 0.5f; // sec
 
 const int CAR_LABEL = 1;
-const float CAR_ROI_RADIUS = 45.0f;
+const float CAR_ROI_RADIUS = 30.0f;
 const float CAR_RESOLUTION = 0.8f;
 const int CAR_MIN_POINT_COUNT = 15;
 const float CAR_MIN_WIDTH = 0.2f;
 const float CAR_MAX_WIDTH = 6.0f;
 const float CAR_MIN_DEPTH = 0.2f;
-const float CAR_MIN_MEANZ = -1.0f;//0.15f;
+const float CAR_MIN_MEANZ = -0.5f;//0.15f;
 const float CAR_MAX_MEANZ = 1.55f;
 const float CAR_MAX_DEPTH = 1.9f;
 const float CAR_MAX_BASE = GROUND_Z + 1.0f;

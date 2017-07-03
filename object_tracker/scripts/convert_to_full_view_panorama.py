@@ -197,7 +197,8 @@ def cluster(lidar, min_d = 2, min_z = -1.35, max_z = 0.5, max_xrange = 6,
     eps, min_smaples: parameters of DBSCAN 
     max_xrange, min_xrange, max_yrange, min_yrange, min_zrange : filter out x,y,z range of clusters 
     '''
-    clus_time = time.time()
+
+
     # remove ground points
     lidar = lidar[lidar[:,2]>= min_z]
     # remove near points (can improve)
@@ -206,13 +207,8 @@ def cluster(lidar, min_d = 2, min_z = -1.35, max_z = 0.5, max_xrange = 6,
     # scale z
     lidar1 = np.copy(lidar)
     lidar1[:,2] = (lidar1[:,2]+min_z)/z_scale
-
-    if len(lidar1) == 0:
-        return lidar1, np.array([])
     # Clustering
-    db_time = time.time()
     db = DBSCAN(eps=eps, min_samples=min_samples).fit(lidar1)
-    print("db_time" + str(time.time() - db_time))
     labels = db.labels_
     # filter max_z, max_xrange = 3, max_yrange, min_zrange 
     label_set = list(set(labels))
@@ -242,7 +238,6 @@ def cluster(lidar, min_d = 2, min_z = -1.35, max_z = 0.5, max_xrange = 6,
         index = index*(features[:,1]>= min_xrange)
     if min_yrange != None:
         index = index*(features[:,2]>= min_yrange)
-    print("clus_time" + str(time.time() - clus_time))
     return lidar[index], labels[index]
 
 
@@ -286,13 +281,14 @@ def fv_cylindrical_projection_for_train(lidar,
 
     theta = np.arctan2(-y, x)
     phi = -np.arctan2(z, d)
-
+       
+    
     x_view = np.int16(np.ceil((theta*180/np.pi + 180)/h_res))
     y_view = np.int16(np.ceil((phi*180/np.pi + ver_fov[1])/v_res))
     
     x_max = np.int16(np.ceil(360/h_res))
     y_max = np.int16(np.ceil((ver_fov[1] - ver_fov[0])/v_res))
-
+    
     view = np.zeros([y_max + 1, x_max + 1, 10], dtype=np.float32)
     if len(lidar) != 0:
         indices = np.logical_and( np.logical_and(x_view >= 0, x_view <= x_max), 
@@ -312,7 +308,7 @@ def fv_cylindrical_projection_for_train(lidar,
 
         # box = np.zeros([y_max+1, x_max+1, 8],dtype=np.float32)
         view[y_view, x_view, 2:] = encode_boxes
-
+        
     if angle_offset == 0:
         return view
     else:
@@ -324,7 +320,6 @@ def fv_cylindrical_projection_for_train(lidar,
         out[:,:pad,:] = view[:, -pad:,:]
         out[:,pad:pad+x_max+1, :] = view
         out[:, pad+x_max+1:x_max+1+2*pad, :] = view[:,:pad,:]
-
         return out
 
 
@@ -346,10 +341,11 @@ def fv_cylindrical_projection_for_test(lidar,
     return : (360 degree full view + 2*offset) cylindrical projection (or panorama view) of lidar
     '''
     if clustering:
-        lidar, _ = cluster(lidar)
+        lidar, labels = cluster(lidar)
     else:
          # remove ground points
-        lidar = lidar[lidar[:,2]>= -1.3]
+        lidar = lidar[lidar[:,2]>= -1.35]
+        labels = []
 
     x = lidar[:,0]
     y = lidar[:,1]
@@ -360,9 +356,11 @@ def fv_cylindrical_projection_for_test(lidar,
         # remove near points
         lidar = lidar[d>=2]
 
+
     theta = np.arctan2(-y, x)
     phi = -np.arctan2(z, d)
-
+       
+    
     x_view = np.int16(np.ceil((theta*180/np.pi + 180)/h_res))
     y_view = np.int16(np.ceil((phi*180/np.pi + ver_fov[1])/v_res))
     
@@ -370,9 +368,9 @@ def fv_cylindrical_projection_for_test(lidar,
     y_max = np.int16(np.ceil((ver_fov[1] - ver_fov[0])/v_res))
     
     view = np.zeros([y_max+1, x_max+1, 6],dtype=np.float32)
-
     if len(lidar) == 0:
-        return view
+        return view, lidar, labels
+
 
     indices = np.logical_and( np.logical_and(x_view >= 0, x_view <= x_max), 
                           np.logical_and(y_view >= 0, y_view <= y_max)  )
@@ -383,14 +381,14 @@ def fv_cylindrical_projection_for_test(lidar,
     y = y[indices]
     z = z[indices]
     d = d[indices]
-
+    
     theta = theta[indices]
     phi = phi[indices]
     coord = [[x[i],y[i],z[i],theta[i],phi[i],d[i]] for i in range(len(x))]
     
     view[y_view,x_view] = coord
-
-    return view
+    
+    return view, lidar, labels
 # Can be deletted
 def list_of_paths(lidar_dir, gt_box_dir):
     '''
@@ -504,4 +502,3 @@ if __name__ == '__main__':
                 print('Finished {0} over {1} frames'.format(i+1, len(list_of_lidar)))
 
     print('Done converting - total time = {0}'.format(time.time() - start))
-
