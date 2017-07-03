@@ -10,7 +10,7 @@ namespace TeamKR
 
 typedef float value_type;
 
-typedef pcl::PointXYZI PCLPoint;
+typedef pcl::PointXYZ PCLPoint;
 typedef pcl::PointCloud<PCLPoint> PCLPointCloud;
 typedef PCLPointCloud::VectorType PCLPointVector;
 typedef std::vector<char> BitVector;
@@ -39,7 +39,7 @@ const float PEDESTRIAN_FILTER_INIT_TIME = 0.5f; // sec
 const float PEDESTRIAN_FILTER_RESET_TIME = 0.5f; // sec
 
 const int CAR_LABEL = 1;
-const float CAR_ROI_RADIUS = 30.0f;
+const float CAR_ROI_RADIUS = 45.0f;
 const float CAR_RESOLUTION = 0.8f;
 const int CAR_MIN_POINT_COUNT = 15;
 const float CAR_MIN_WIDTH = 0.2f;

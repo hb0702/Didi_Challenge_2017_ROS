@@ -8,11 +8,15 @@
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/segmentation/extract_clusters.h>
 #include <pcl/filters/extract_indices.h>
+#include <pcl/kdtree/kdtree.h>
 #include <pcl_conversions/pcl_conversions.h>
 
 namespace TeamKR
 {
+
+const float MAX_VALUE = 1000.0f;
 
 class PointFilter
 {
@@ -23,6 +27,7 @@ public:
     	publisher_ = n.advertise<std_msgs::Float64MultiArray>("/filtered_points", 1);
     	
     	cloud_ = PCLPointCloud::Ptr(new PCLPointCloud());
+    	filtered_ = PCLPointCloud::Ptr(new PCLPointCloud());
 
     	// init cluster builder
 		value_type resolution = 0.0;
@@ -69,7 +74,6 @@ private:
 		output.data.push_back(tsNsec);
 
 		sensor_msgs::PointCloud2 response = *msg;
-		response.fields[3].name = "intensity";
 		pcl::fromROSMsg(response, *cloud_);
 		PCLPointVector points = cloud_->points;
 		size_t pointCount = points.size();
@@ -84,87 +88,90 @@ private:
 		BitVector badPointBV(pointCount, 0);
 		markCar(points, badPointBV);
 
-		if (USE_RANSAC_GROUND_FITTING)
+		markGround_RANSAC(badPointBV);
+		markGround_simple(points, badPointBV);
+
+		// get filtered cloud
+		filtered_->points.clear();
 		{
-			markGround_RANSAC(badPointBV);
-		}
-		else
-		{
-			markGround_simple(points, badPointBV);
-		}
-
-		// cluster
-		std::list<Cluster*> clusters;
-		builder_->run(points, badPointBV, clusters);
-		size_t clusterCount = clusters.size();
-		if (clusterCount == 0u)
-		{
-			// publish empty points
-			publisher_.publish(output);
-			return;
-		}
-
-		if (USE_GOOD_CLUSTER_ONLY)
-		{
-			std::list<Cluster*> filtered;
-			filterClusters(clusters, filtered, true);
-
-			// mark good clusters
-			std::vector<int> clusterIndices(pointCount, -1);
-			markGoodClusters(points, filtered, badPointBV, clusterIndices);
-
-			// add cluster info
-			output.data.push_back(filtered.size());
-			for (std::list<Cluster*>::const_iterator cit = filtered.begin(); cit != filtered.end(); ++cit)
-			{
-				output.data.push_back((*cit)->center()[0]);
-				output.data.push_back((*cit)->center()[1]);
-			}
-
-			// add filtered points to output
 			PCLPointVector::const_iterator pit = points.begin();
-			std::vector<int>::iterator bit = clusterIndices.begin();
+			BitVector::const_iterator bit = badPointBV.begin();
 			for (; pit != points.end(); ++pit, ++bit)
 			{
-				if (*bit > -1)
+				if (*bit == 0)
 				{
-					output.data.push_back(pit->x);
-					output.data.push_back(pit->y);
-					output.data.push_back(pit->z);
-					output.data.push_back(*bit);
+					filtered_->points.push_back(*pit);
 				}
 			}
 		}
-		// else
-		// {
-		// 	// get bad clusters
-		// 	std::list<Cluster*> filter;
-		// 	filterClusters(clusters, filter, false);
 
-		// 	// mark bad clusters
-		// 	markBadClusters(points, filter, badPointBV);
-
-		// 	// publish filtered points
-		// 	PCLPointVector::const_iterator pit = points.begin();
-		// 	BitVector::iterator bit = badPointBV.begin();
-		// 	for (; pit != points.end(); ++pit, ++bit)
-		// 	{
-		// 		if (*bit == 0)
-		// 		{
-		// 			output.data.push_back(pit->x);
-		// 			output.data.push_back(pit->y);
-		// 			output.data.push_back(pit->z);
-		// 		}
-		// 	}
-		// }
-
-		publisher_.publish(output);
-
-		// release memory
-		for (std::list<Cluster*>::iterator it = clusters.begin(); it != clusters.end(); ++it)
+		// add point count
+		if (filtered_->points.size() != 0)
 		{
-			delete *it;
+			// euclidian clustering
+			pcl::search::KdTree<PCLPoint>::Ptr tree (new pcl::search::KdTree<PCLPoint>);
+			tree->setInputCloud(filtered_);
+
+			std::vector<pcl::PointIndices> cluster_indices;
+
+			pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+			ec.setClusterTolerance(CAR_RESOLUTION);
+			ec.setMinClusterSize(CAR_MIN_POINT_COUNT);
+			ec.setMaxClusterSize(10000);
+			ec.setSearchMethod(tree);
+			ec.setInputCloud(filtered_);
+			ec.extract(cluster_indices);
+
+			// get point coordinate with cluster index
+			int ci = 0;
+			std::vector<value_type> pointInfo;
+			std::list<value_type> clusterX, clusterY;
+			for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin(); it != cluster_indices.end(); ++it)
+			{
+				value_type cx = 0, cy = 0;
+				value_type minx = MAX_VALUE, maxx = -MAX_VALUE, miny = MAX_VALUE, maxy = -MAX_VALUE, minz = MAX_VALUE, maxz = -MAX_VALUE;
+				int numPoints = 0;
+				for (std::vector<int>::const_iterator iit = it->indices.begin(); iit != it->indices.end(); ++iit)
+				{
+					PCLPoint point = filtered_->points[*iit];
+					
+					pointInfo.push_back(point.x);
+					pointInfo.push_back(point.y);
+					pointInfo.push_back(point.z);
+					pointInfo.push_back(ci);
+
+					cx += point.x;
+					cy += point.y;
+
+					++numPoints;
+				}
+				cx /= numPoints;
+				cy /= numPoints;
+				clusterX.push_back(cx);
+				clusterY.push_back(cy);
+
+				++ci;
+			}
+
+			// add num cluster
+			output.data.push_back(ci);
+
+			// add cluster x,y
+			{
+				std::list<value_type>::const_iterator xit = clusterX.begin();
+				std::list<value_type>::const_iterator yit = clusterY.begin();
+				for (; xit != clusterX.end(); ++xit, ++yit)
+				{
+					output.data.push_back(*xit);
+					output.data.push_back(*yit);
+				}
+			}
+
+			// add points with cluster index
+			std::copy(pointInfo.begin(), pointInfo.end(), std::back_inserter(output.data));
 		}
+
+		publisher_.publish(output);		
 	}
 
 	void markCar(const PCLPointVector& points, BitVector& filterBV) const
@@ -236,8 +243,8 @@ private:
 				if (maxWidth < CAR_MAX_WIDTH
 					&& maxWidth > CAR_MIN_WIDTH
 					&& top - base > CAR_MIN_DEPTH
-					&& meanZ > GROUND_Z + CAR_MIN_MEANZ
-					&& meanZ < GROUND_Z + CAR_MAX_MEANZ
+					//&& meanZ > GROUND_Z + CAR_MIN_MEANZ
+					//&& meanZ < GROUND_Z + CAR_MAX_MEANZ
 					&& top < GROUND_Z + CAR_MAX_DEPTH
 					//&& base < CAR_MAX_BASE
 					&& (*cit)->pointCount() > CAR_MIN_POINT_COUNT
@@ -334,6 +341,7 @@ private:
 	ros::Subscriber subscriber_;
 	ros::Publisher publisher_;
 	PCLPointCloud::Ptr cloud_;
+	PCLPointCloud::Ptr filtered_;
 	// cluster builder
 	ClusterBuilder* builder_;
 	// ground filtering option

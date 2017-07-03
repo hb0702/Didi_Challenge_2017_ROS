@@ -1,0 +1,10 @@
+#! /bin/bash
+
+./bag_player --tracklet ~/catkin_ws/src/tracklet --file_path /media/jaeil/PJI/challenge/r2_data/release/car/testing/ford01.bag
+./bag_player --tracklet ~/catkin_ws/src/tracklet --file_path /media/jaeil/PJI/challenge/r2_data/release/car/testing/ford02.bag
+./bag_player --tracklet ~/catkin_ws/src/tracklet --file_path /media/jaeil/PJI/challenge/r2_data/release/car/testing/ford03.bag
+./bag_player --tracklet ~/catkin_ws/src/tracklet --file_path /media/jaeil/PJI/challenge/r2_data/release/car/testing/ford04.bag
+./bag_player --tracklet ~/catkin_ws/src/tracklet --file_path /media/jaeil/PJI/challenge/r2_data/release/car/testing/ford05.bag
+./bag_player --tracklet ~/catkin_ws/src/tracklet --file_path /media/jaeil/PJI/challenge/r2_data/release/car/testing/ford06.bag
+./bag_player --tracklet ~/catkin_ws/src/tracklet --file_path /media/jaeil/PJI/challenge/r2_data/release/car/testing/ford07.bag
+./bag_player --tracklet ~/catkin_ws/src/tracklet --file_path /media/jaeil/PJI/challenge/r2_data/release/car/testing/mustang01.bag

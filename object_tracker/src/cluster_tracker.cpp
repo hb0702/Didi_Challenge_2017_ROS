@@ -139,7 +139,6 @@ private:
   //      	}
 
 		sensor_msgs::PointCloud2 response = *msg;
-		response.fields[3].name = "intensity";
 		pcl::fromROSMsg(response, *cloud_);
 		PCLPointVector points = cloud_->points;
 		size_t pointCount = points.size();
