@@ -6,6 +6,8 @@ import rospy as rp
 import numpy as np
 import math
 import struct
+import tf
+import tf.transformations as transformer
 
 from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs.point_cloud2 as pc2
@@ -14,7 +16,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 
 from sklearn.cluster import DBSCAN
 
-import tensorflow as tf
+import tensorflow
 import keras
 from keras.models import load_model
 from keras.optimizers import Adam
@@ -39,11 +41,11 @@ class dl_tracker:
 		# model
 		dir_path = os.path.dirname(os.path.realpath(__file__))
 		#self.model = load_model(os.path.join(dir_path, '../model/fv_model_for_car_June_30_132_63.h5'))
-		self.model = load_model(os.path.join(dir_path, '../model/fv_July_01_113.h5'))
+		self.model = load_model(os.path.join(dir_path, '../model/fv_July_02_057.h5'))
 		# filter
 		self.filter = dl_filter()
 		# graph
-		self.graph = tf.get_default_graph()
+		self.graph = tensorflow.get_default_graph()
 		# communication
 		self.initialize_communication()
 		rp.loginfo("dl_tracker: initialized")
@@ -112,26 +114,44 @@ class dl_tracker:
 			num_cluster = int(data.data[2])
 			cluster_xy = np.array(data.data[3:3+2*num_cluster]).reshape(-1, 2)
 			lidar_with_idx = np.array(data.data[3+2*num_cluster:]).reshape(-1, 4)
-		detected_boxes = np.empty((0,8))
+		box = np.empty((0,8))
 
 		# predict
 		with self.graph.as_default():
-			detected_boxes = predict_and_correct(self.model, lidar_with_idx, cluster_xy, 
-				clusterPoint=False, seg_thres=0.5, nb_d=2)
+			box = predict_and_correct(self.model, lidar_with_idx, cluster_xy, 
+				clusterPoint=False, seg_thres=0.3, nb_d=4)
 
 		# filter by velocity
-		boxes = self.filter.filter_by_velocity(detected_boxes, ts_sec, ts_nsec)
+		if len(box) == 0:
+			box = self.filter.prev_box
+			if len(box) != 0:
+				adv = self.filter.advance(ts_sec, ts_nsec)
+				box[1] += adv[0]
+				box[2] += adv[1]
+		if  len(box) != 0:
+			vel = self.filter.calc_velocity(box, ts_sec, ts_nsec)
+			angle = box[7]
+			#angle += np.arctan2(vel[1], vel[0])
+			# print "vel: ", vel
+			# print "ori ang: ", box[7]
+			# print "add ang: ", np.arctan2(vel[1], vel[0])
+			# print "ang: ", angle
+			box[7] = normalize_angle(angle)
+
+		# boxes = [box]
+		# boxes = self.filter.filter_by_velocity(boxes, ts_sec, ts_nsec)
+		# box = boxes[0]
 
 		if PUBLISH_MARKERS:
-			if detected_boxes != None and len(detected_boxes) > 0:			
-				self.publish_markers(detected_boxes, boxes)
+			if box != None and len(box) > 0:			
+				self.publish_markers(box)
 
-		if len(boxes) > 0:			
-			self.publish_detected_boxes(boxes)
+		if len(box) > 0:			
+			self.publish_detected_box(box)
 
 		print ("total time: " + str(time.time() - total_start))
 
-	def publish_detected_boxes(self, box_info):
+	def publish_detected_box(self, box_info):
 		arr = Float32MultiArray()
 		flat_box_info = np.reshape(box_info, (-1))
 		arr.data = flat_box_info.tolist()
@@ -139,43 +159,45 @@ class dl_tracker:
 		self.box_publisher.publish(arr)
 		#rp.loginfo("dl_tracker: published %d boxes", len(box_info))
 
-	def publish_markers(self, det_box_info, box_info):
-		num_boxes = len(det_box_info)
-		if num_boxes > 0:
-			# update markers
-			num_markers = min(num_boxes, MAX_MARKER_COUNT)
-			for i in range(num_markers):
-				info = det_box_info[i]
-				marker = self.detected_markers.markers[i]
-				marker.pose.position.x = info[1]
-				marker.pose.position.y = info[2]
-				marker.pose.position.z = info[3]
-				marker.scale.x = info[4]
-				marker.scale.y = info[5]
-				marker.scale.z = info[6]
-				marker.pose.orientation.z = math.degrees(info[7])			
-				marker.color.a = 0.3
-			# hide markers not used
-			if num_boxes < MAX_MARKER_COUNT:
-				for i in range(num_boxes, MAX_MARKER_COUNT):
-					marker = self.detected_markers.markers[i]
-					marker.color.a = 0.0
+	def publish_markers(self, box_info):
+		# num_boxes = len(det_box_info)
+		# if num_boxes > 0:
+		# 	# update markers
+		# 	num_markers = min(num_boxes, MAX_MARKER_COUNT)
+		# 	for i in range(num_markers):
+		# 		info = det_box_info[i]
+		# 		marker = self.detected_markers.markers[i]
+		# 		marker.pose.position.x = info[1]
+		# 		marker.pose.position.y = info[2]
+		# 		marker.pose.position.z = info[3]
+		# 		marker.scale.x = info[4]
+		# 		marker.scale.y = info[5]
+		# 		marker.scale.z = info[6]
+		# 		marker.pose.orientation.z = math.degrees(info[7])			
+		# 		marker.color.a = 0.3
+		# 	# hide markers not used
+		# 	if num_boxes < MAX_MARKER_COUNT:
+		# 		for i in range(num_boxes, MAX_MARKER_COUNT):
+		# 			marker = self.detected_markers.markers[i]
+		# 			marker.color.a = 0.0
 		if len(box_info) > 0:
-			for i in range(1):
-				info = box_info[i]
-				marker = self.predicted_markers.markers[i]
-				marker.pose.position.x = info[1]
-				marker.pose.position.y = info[2]
-				marker.pose.position.z = info[3]
-				marker.scale.x = info[4]
-				marker.scale.y = info[5]
-				marker.scale.z = info[6]
-				marker.pose.orientation.z = math.degrees(info[7])
-				marker.color.a = 0.3
+			marker = self.predicted_markers.markers[0]
+			marker.pose.position.x = box_info[1]
+			marker.pose.position.y = box_info[2]
+			marker.pose.position.z = box_info[3]
+			marker.scale.x = box_info[4]
+			marker.scale.y = box_info[5]
+			marker.scale.z = box_info[6]
+			q = transformer.quaternion_from_euler(0,0,box_info[7])
+			marker.pose.orientation.x = q[0]
+			marker.pose.orientation.y = q[1]
+			marker.pose.orientation.z = q[2]
+			marker.pose.orientation.w = q[3]
+			marker.color.a = 0.3
 		# publish
-		self.detected_marker_publisher.publish(self.detected_markers)
+		# self.detected_marker_publisher.publish(self.detected_markers)
 		self.predicted_marker_publisher.publish(self.predicted_markers)		
-		rp.loginfo("dl_tracker: published %d markers", num_markers)
+		# rp.loginfo("dl_tracker: published %d markers", num_markers)
 
 def rotation_v(theta, points):
 	v = np.sin(theta)
@@ -222,8 +244,6 @@ def fit_box(lidar, nb_d = 128):
     
     #box_2d = rotation_v(-angle*arg_min, np.array([rp0,rp1,rp2,rp3])) + center
     box_2d = np.array([rotation(-angle*arg_min, p) for p in [rp0,rp1,rp2,rp3]]) + center
-
-    print ()
 
     return box_2d#, box
 
@@ -273,8 +293,10 @@ def normalize_angle(angle):
 def move_box_info(box_info, box):
 	center = np.mean(box, axis=0)
 	miny_idx = np.argmin(box[:,1])
-	wv = box[(miny_idx+1)%4] - box[miny_idx]	
-	hv = box[(miny_idx+2)%4] - box[(miny_idx+1)%4]
+	# wv = box[(miny_idx+1)%4] - box[miny_idx]
+	# hv = box[(miny_idx+2)%4] - box[(miny_idx+1)%4]
+	wv = box[2] - box[1]
+	hv = box[1] - box[0]
 	rz = normalize_angle(np.arctan2(wv[1], wv[0]))
 	width = length(wv)
 	height = length(hv)
@@ -369,7 +391,7 @@ def rotation_v(theta, points):
 	out[:,[1]] = -v*points[:,[0]] + u*points[:,[1]]
 	return out
 
-def predict_and_correct(model, lidar_with_idx, cluster_xy, clusterPoint=True, cluster=True, seg_thres=0.5, nb_d=128):
+def predict_and_correct(model, lidar_with_idx, cluster_xy, clusterPoint=True, seg_thres=0.5, nb_d=128):
     
 	test_view, _, _ =  fv_cylindrical_projection_for_test(lidar_with_idx, clustering=clusterPoint)
 
@@ -411,12 +433,9 @@ def predict_and_correct(model, lidar_with_idx, cluster_xy, clusterPoint=True, cl
 	boxes[:,[6]] = depth
 	boxes[:,[7]] = rz
 
-	if not cluster:
-		return boxes
-	else:
-		one_box = one_box_clustering(boxes)
-		one_box_info = correct_predicted_box(one_box, lidar_with_idx, cluster_xy, nb_d)
-		return np.expand_dims(one_box_info,0)
+	one_box = one_box_clustering(boxes)
+	one_box_info = correct_predicted_box(one_box, lidar_with_idx, cluster_xy, nb_d)
+	return one_box_info
 
 def listen():
 	processor = dl_tracker()

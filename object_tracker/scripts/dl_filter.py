@@ -2,8 +2,8 @@
 import numpy as np
 
 MAX_SPEED_GRAD = 5.56 # 20 km/h in m/s
-INIT_TIME = 1.0 # sec
-RESET_TIME = 1.0 # sec
+INIT_TIME = 1 # sec
+RESET_TIME = 1 # sec
 
 class dl_filter:
 
@@ -14,24 +14,40 @@ class dl_filter:
 		self.valid = False
 
 		self.prev_time = 0.0
-		self.prev_vel = [0, 0]
-		self.prev_box = []
+		self.prev_vel = np.array([0.0, 0.0])
+		self.prev_box = np.array([])
+
+	def calc_velocity(self, box, ts_sec, ts_nsec):
+		point = box[1:3]
+		time = to_time(ts_sec, ts_nsec)
+		vel = np.array([0.0, 0.0])
+		if len(self.prev_box) > 0:
+			vel = self.velocity(point, time)
+		self.prev_box = box
+		self.prev_time = time
+		self.prev_vel = vel
+		return vel
+
+	def advance(self, ts_sec, ts_nsec):
+		time = to_time(ts_sec, ts_nsec)
+		return self.prev_vel * (time - self.prev_time)
 
 	def filter_by_velocity(self, boxes, ts_sec, ts_nsec):
 		time = to_time(ts_sec, ts_nsec)
 		output = []
 		if boxes == None or len(boxes) < 1: # no box
-			if not self.initialized:
+			if self.initialized != True:
 				# doing nothing for now
 				a = 0
 			else:
 				box = np.copy(self.prev_box)
 				dp = self.prev_vel * (time - self.prev_time)
-				box[:,:,0] += dp[0]
-				box[:,:,1] += dp[1]
+				box[1] += dp[0]
+				box[2] += dp[1]
 				output.append(box)
+			self.init_start_time = -1
 		else: # filtered box exists
-			if (not self.initialized) or (not self.valid):
+			if (self.initialized != True) or (self.valid != True):
 				# start init timer
 				if self.init_start_time < 0:
 					# save current info
@@ -41,10 +57,10 @@ class dl_filter:
 					else:
 						box = self.select_box(boxes)
 					output.append(box)
-					prev_vel = [0, 0]
-					prev_time = time
-					prev_box = box
-					init_start_time = time
+					self.prev_vel = np.array([0, 0])
+					self.prev_time = time
+					self.prev_box = box
+					self.init_start_time = time
 				# init timer running
 				else:
 					#filter with velocity
@@ -52,21 +68,21 @@ class dl_filter:
 					for box in boxes:
 						point = box[1:3]
 						vel = self.velocity(point, time)
-						if norm(vel - prev_vel) < MAX_SPEED_GRAD:
+						if norm(vel - self.prev_vel) < MAX_SPEED_GRAD:
 							found.append(box)
 
 					if len(found) < 1:
 						# reset init timer
 						self.init_start_time = -1
 						#predict
-						if not self.initialized:
+						if self.initialized != True:
 							# do nothing for now
 							a = 0
 						else:
 							box = np.copy(self.prev_box)
 							dp = self.prev_vel * (time - self.prev_time)
-							box[:,:,0] += dp[0]
-							box[:,:,1] += dp[1]
+							box[1] += dp[0]
+							box[2] += dp[1]
 							output.append(box)
 					else: # found
 						# save current info
@@ -77,7 +93,7 @@ class dl_filter:
 							box = self.select_box(boxes)
 						output.append(box)
 						point = box[1:3]
-						vel = velocity(point, time)
+						vel = self.velocity(point, time)
 						self.prev_vel = vel
 						self.prev_time = time
 						self.prev_box = box
@@ -92,14 +108,14 @@ class dl_filter:
 				for box in boxes:
 					point = box[1:3]
 					vel = self.velocity(point, time)
-					if norm(vel - prev_vel) < MAX_SPEED_GRAD:
+					if norm(vel - self.prev_vel) < MAX_SPEED_GRAD:
 						found.append(box)
 
 				if len(found) < 1:
 					box = np.copy(self.prev_box)
 					dp = self.prev_vel * (time - self.prev_time)
-					box[:,:,0] += dp[0]
-					box[:,:,1] += dp[1]
+					box[1] += dp[0]
+					box[1] += dp[1]
 					output.append(box)
 				else: # found
 					# save current info
@@ -110,7 +126,7 @@ class dl_filter:
 						box = self.select_box(boxes)
 					output.append(box)
 					point = box[1:3]
-					vel = velocity(point, time)
+					vel = self.velocity(point, time)
 					self.prev_vel = vel
 					self.prev_time = time
 					self.prev_box = box
@@ -122,12 +138,13 @@ class dl_filter:
 					self.valid = False
 					self.reset_start_time = -1
 					# start initialization
-					self.filter_by_velocity(boxes, ts_sec, ts_nsec)
+					self.filter_by_velocity(boxes, ts_sec, ts_nsec)	
+		print self.prev_vel	
 		return output
 
 	def velocity(self, pos, time):
 		prev_pos = self.prev_box[1:3]
-		return float(pos - prev_pos) / (time - self.prev_time)
+		return (pos - prev_pos) / (time - self.prev_time)
 
 	def select_box(self, boxes):
 		# TODO: need to fix this
