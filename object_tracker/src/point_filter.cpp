@@ -125,7 +125,7 @@ private:
 			// get point coordinate with cluster index
 			int numClusters = 0;
 			std::list<value_type> clusterX, clusterY;
-			std::list<std::vector<value_type>> pointInfoList;
+			std::list<std::vector<value_type> > pointInfoList;
 			for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin(); it != cluster_indices.end(); ++it)
 			{
 				std::vector<value_type> pointInfo;
@@ -189,9 +189,9 @@ private:
 			}
 
 			// add points with cluster index
-			for (std::list<std::vector<value_type>>::const_iterator it = pointInfoList.begin(); it != pointInfoList.end(); ++it)
+			for (std::list<std::vector<value_type> >::const_iterator it = pointInfoList.begin(); it != pointInfoList.end(); ++it)
 			{
-				std::copy(pointInfo.begin(), pointInfo.end(), std::back_inserter(output.data));	
+				std::copy((*it).begin(), (*it).end(), std::back_inserter(output.data));	
 			}
 		}
 
