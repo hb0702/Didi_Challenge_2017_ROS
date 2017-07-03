@@ -118,7 +118,7 @@ class dl_tracker:
 
 		# predict
 		with self.graph.as_default():
-			detected_boxes = detect(self.model, lidar, clusterPoint=False, seg_thres=0.5, multi_box=False)
+			detected_boxes = predict_and_correct(model, lidar, clusterPoint=False, seg_thres=0.5)
 
 		# filter by velocity
 		boxes, from_prev = self.filter.filter_by_velocity(detected_boxes, ts_sec, ts_nsec)
@@ -309,6 +309,11 @@ def correct_box_3d(predbox, fitbox, min_z = -1.5):
     box[:4,:2] = box2d
     box[4:,:2] = box2d
     box[4:,2] = abs(predbox[4,2] - predbox[0,2])+min_z
+    # # Jaeil fixed
+    # box = np.zeros_like(predbox)
+    # box[:4,:2] = box2d
+    # box[4:,:2] = box2d
+    # box[:,2] = predbox[:,2]
     return box
 
 def correct_predicted_box(clusters, labels, boxes):
@@ -354,7 +359,6 @@ def one_box_clustering(boxes, eps = 1, min_samples = 1):
     box = np.mean(boxes[index],axis = 0)
     return np.expand_dims(box, 0)
 
-
 def multi_box_clustering(boxes, eps = 1, min_samples = 1):
     # Extract the center from predicted boxes
     box_centers = np.mean(boxes[:,[0,2],:2], axis = 1)
@@ -367,9 +371,9 @@ def multi_box_clustering(boxes, eps = 1, min_samples = 1):
     
     return mul_clusters
 
-def predict_and_correct(model,lidar, cluster = True, seg_thres=0.5, multi_box = True):
+def predict_and_correct(model, lidar, clusterPoint=True, cluster=True, seg_thres=0.5):
     
-    test_view, clusters, labels =  fv_cylindrical_projection_for_test(lidar)
+    test_view, clusters, labels =  fv_cylindrical_projection_for_test(lidar, clustering=clusterPoint)
     
     view = test_view[:,:,[5,2]].reshape(1,16,320,2)
     
@@ -411,15 +415,11 @@ def predict_and_correct(model,lidar, cluster = True, seg_thres=0.5, multi_box = 
 
     boxes = np.concatenate(list_boxes, axis = 0)
     if not cluster:
-        return boxes
-    
-    elif multi_box:
-        mul_boxes = multi_box_clustering(boxes)
-        mul_boxes = correct_predicted_box(clusters, labels, mul_boxes)
-        return mul_boxes
+        return boxes    
     else:
         one_box = one_box_clustering(boxes)
-        one_box = correct_predicted_box(clusters, labels, one_box)[0]
+        one_box = correct_predicted_box(clusters, labels, one_box)
+        one_box_info = np.array([to_box_info(ob) for ob in one_box])
         return one_box
 
 def normalize_angle(angle):
@@ -429,10 +429,10 @@ def normalize_angle(angle):
 		angle += 2*PI
 	return angle
 
-def move_box_info(box_info, box):
+def to_box_info(box_info, box):
 	center = np.mean(box, axis=0)
-	miny_idx = np.argmin(box[:,1])
-	wv = box[(miny_idx+1)%4] - box[miny_idx]	
+	miny_idx = np.argmin(box[:4,1])
+	wv = box[(miny_idx+1)%4] - box[miny_idx]
 	hv = box[(miny_idx+2)%4] - box[(miny_idx+1)%4]
 	rz = normalize_angle(np.arctan2(wv[1], wv[0]))
 	# # find nearest new rz from the old rz
@@ -441,10 +441,14 @@ def move_box_info(box_info, box):
 	# rz = rz_candidate[np.argmin(np.abs(rz_candidate - orz))]
 	width = length(wv)
 	height = length(hv)	
+	depth = box[4,2] - box[0,2]
+	box_info[0] = CAR_LABEL
 	box_info[1] = center[0]
 	box_info[2] = center[1]
+	box_info[3] = center[2]
 	box_info[4] = width
 	box_info[5] = height
+	box_info[6] = depth
 	box_info[7] = rz
 	return box_info
 
