@@ -119,7 +119,7 @@ class dl_tracker:
 		# predict
 		with self.graph.as_default():
 			box = predict_and_correct(self.model, lidar_with_idx, cluster_xy, 
-				clusterPoint=False, seg_thres=0.3, nb_d=4)
+				clusterPoint=False, seg_thres=0.3, nb_d=6)
 
 		# filter by velocity
 		if len(box) == 0:
