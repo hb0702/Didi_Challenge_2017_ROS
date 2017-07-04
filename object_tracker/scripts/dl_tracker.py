@@ -106,20 +106,16 @@ class dl_tracker:
 		ts_sec = int(data.data[0])
 		ts_nsec = int(data.data[1])
 
-		num_cluster = 0
-		cluster_xy = np.empty((0,2))
-		lidar_with_idx = np.empty((0,4))
+		lidar = np.empty((0,3))
 
 		if (len(data.data) > 2):
-			num_cluster = int(data.data[2])
-			cluster_xy = np.array(data.data[3:3+2*num_cluster]).reshape(-1, 2)
-			lidar_with_idx = np.array(data.data[3+2*num_cluster:]).reshape(-1, 4)
+			lidar = np.array(data.data[2:]).reshape(-1, 3)
 		box = np.empty((0,8))
 
 		# predict
 		with self.graph.as_default():
-			box = predict_and_correct(self.model, lidar_with_idx, cluster_xy, 
-				clusterPoint=False, seg_thres=0.3, nb_d=4)
+			box = predict_and_correct(self.model, lidar, clusterPoint=True, seg_thres=0.3, nb_d=4,
+										eps=0.8, min_samples=1, leaf_size=30)
 
 		# filter by velocity
 		if len(box) == 0:
@@ -130,17 +126,7 @@ class dl_tracker:
 				box[2] += adv[1]
 		if  len(box) != 0:
 			vel = self.filter.calc_velocity(box, ts_sec, ts_nsec)
-			angle = box[7]
-			#angle += np.arctan2(vel[1], vel[0])
-			# print "vel: ", vel
-			# print "ori ang: ", box[7]
-			# print "add ang: ", np.arctan2(vel[1], vel[0])
-			# print "ang: ", angle
-			box[7] = normalize_angle(angle)
-
-		# boxes = [box]
-		# boxes = self.filter.filter_by_velocity(boxes, ts_sec, ts_nsec)
-		# box = boxes[0]
+			box[7] = normalize_angle(box[7])
 
 		if PUBLISH_MARKERS:
 			if box != None and len(box) > 0:			
@@ -353,12 +339,15 @@ def correct_box_info(predbox_info, fitbox):
         moved_info = move_box_info(predbox_info, box)
         return moved_info
   
-def correct_predicted_box(box_info, lidar_with_idx, cluster_xy, nb_d=128):
-    nb_clusters = len(cluster_xy)
+def correct_predicted_box(box_info, lidar, labels, nb_d=128):
+	nb_clusters = np.max(labels)
     if nb_clusters == 0:
         return box_info
     else:
         box_xy = box_info[1:3]
+        cluster_xy = np.zeros((nb_clusters, 2))
+        for n in range(nb_clusters):
+        	cluster_xy[i] = np.mean(lidar[labels==n], axis=0)
     	distances = [distance(box_xy, cluster_xy[i]) for i in range(nb_clusters)]
     	ind = np.argmin(distances)
     	cluster_points = lidar_with_idx[lidar_with_idx[:,3] == ind]
@@ -391,9 +380,11 @@ def rotation_v(theta, points):
 	out[:,[1]] = -v*points[:,[0]] + u*points[:,[1]]
 	return out
 
-def predict_and_correct(model, lidar_with_idx, cluster_xy, clusterPoint=True, seg_thres=0.5, nb_d=128):
+def predict_and_correct(model, lidar, clusterPoint=True, 
+						eps=0.8, min_samples=1, leaf_size=30, seg_thres=0.5, nb_d=128):
     
-	test_view, _, _ =  fv_cylindrical_projection_for_test(lidar_with_idx, clustering=clusterPoint)
+	test_view, _, labels =  fv_cylindrical_projection_for_test(lidar, clustering=clusterPoint, 
+															eps=eps, min_samples=min_samples, leaf_size=leaf_size)
 
 	view = test_view[:,:,[5,2]].reshape(1,16,320,2)
 
@@ -434,7 +425,7 @@ def predict_and_correct(model, lidar_with_idx, cluster_xy, clusterPoint=True, se
 	boxes[:,[7]] = rz
 
 	one_box = one_box_clustering(boxes)
-	one_box_info = correct_predicted_box(one_box, lidar_with_idx, cluster_xy, nb_d)
+	one_box_info = correct_predicted_box(one_box, lidar, labels, nb_d)
 	return one_box_info
 
 def listen():

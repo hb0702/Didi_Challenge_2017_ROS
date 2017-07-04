@@ -108,9 +108,6 @@ private:
 		std::list<Cluster*> filtered;
 		filterClusters(clusters, filtered, true);
 
-		int numCluster = 0;
-		std::vector<value_type> clusterX, clusterY;
-		std::vector<value_type> pointInfo;
 		for (std::list<Cluster*>::const_iterator cit = filtered.begin(); cit != filtered.end(); ++cit)
 		{
 			if ((*cit)->pointCount() == 0)
@@ -120,30 +117,10 @@ private:
 
 			for (PCLPointVector::const_iterator pit = (*cit)->pclPoints().begin(); pit != (*cit)->pclPoints().end(); ++pit)
 			{
-				pointInfo.push_back(pit->x);
-				pointInfo.push_back(pit->y);
-				pointInfo.push_back(pit->z);
-				pointInfo.push_back(numCluster);
+				output.data.push_back(pit->x);
+				output.data.push_back(pit->y);
+				output.data.push_back(pit->z);
 			}
-
-			clusterX.push_back((*cit)->center()[0]);
-			clusterY.push_back((*cit)->center()[1]);
-
-			numCluster++;
-		}
-
-		output.data.push_back(numCluster);
-		std::vector<value_type>::const_iterator xit = clusterX.begin();
-		std::vector<value_type>::const_iterator yit = clusterY.begin();
-		for (; xit != clusterX.end(); ++xit)
-		{
-			output.data.push_back(*xit);
-			output.data.push_back(*yit);
-		}
-
-		for (std::vector<value_type>::const_iterator it = pointInfo.begin(); it != pointInfo.end(); ++it)
-		{
-			output.data.push_back(*it);
 		}
 
 		publisher_.publish(output);
@@ -202,9 +179,8 @@ private:
 		BitVector::iterator bit = filterBV.begin();
 		for (; pit != points.end(); ++pit, ++bit)
 		{
-			if (pit->x < -CAR_ROI_RADIUS || pit->x > CAR_ROI_RADIUS
-				|| pit->y < -CAR_ROI_RADIUS || pit->y > CAR_ROI_RADIUS
-				|| pit->z < maxGround_)
+			value_type d = std::sqrt(pit->x * pit->x + pit->y * pit -> y);
+			if (d < CAR_ROI_RADIUS || pit->z < maxGround_)
 			{
 				*bit = 1;
 			}

@@ -189,7 +189,7 @@ def cylindrical_projection_for_training(lidar, gt_box3d, ver_fov=(-24.4, 2.), ho
 ##########################################################################################
 def cluster(lidar, min_d = 2, min_z = -1.35, max_z = 0.5, max_xrange = 6,
             max_yrange = 6, min_xrange = 0.5, min_yrange = 0.5,  
-            min_zrange = 0.2, min_points = 15, z_scale = 1.,eps = 0.8, min_samples = 1):
+            min_zrange = 0.2, min_points = 15, z_scale = 1., eps = 0.8, min_samples = 1, leaf_size = 30):
     '''
     min_z : remove points whose z <= min_z (ground removing)
     min_d : remove points within distance of min_d
@@ -208,37 +208,9 @@ def cluster(lidar, min_d = 2, min_z = -1.35, max_z = 0.5, max_xrange = 6,
     lidar1 = np.copy(lidar)
     lidar1[:,2] = (lidar1[:,2]+min_z)/z_scale
     # Clustering
-    db = DBSCAN(eps=eps, min_samples=min_samples).fit(lidar1)
+    db = DBSCAN(eps=eps, min_samples=min_samples, leaf_size=leaf_size).fit(lidar1)
     labels = db.labels_
-    # filter max_z, max_xrange = 3, max_yrange, min_zrange 
-    label_set = list(set(labels))
-    cluster_height = np.zeros(len(label_set))
-    cluster_zrange = np.zeros(len(label_set))
-    cluster_xrange = np.zeros(len(label_set))
-    cluster_yrange = np.zeros(len(label_set))
-    n_points = np.zeros(len(label_set))
-    for i in range(len(label_set)):
-        z_cluster = lidar[:,2][labels == label_set[i]]
-        cluster_height[i] = np.max(z_cluster)
-        cluster_zrange[i] = cluster_height[i] - np.min(z_cluster)
-        
-        x_cluster = lidar[:,0][labels == label_set[i]]
-        cluster_xrange[i] = np.max(x_cluster) - np.min(x_cluster)
-        
-        y_cluster = lidar[:,1][labels == label_set[i]]
-        cluster_yrange[i] = np.max(y_cluster) - np.min(y_cluster)
-        
-        n_points[i] = np.sum(labels == label_set[i])
-        
-    features = np.array([[cluster_height[labels[i]], cluster_xrange[labels[i]], cluster_yrange[labels[i]], 
-                          cluster_zrange[labels[i]], n_points[labels[i]] ]  for i in range(len(labels))])
-    
-    index = (features[:,0]<=max_z)*(features[:,1]<=max_xrange)*(features[:,2]<=max_yrange)*(features[:,3]>=min_zrange)*(features[:,4]>=min_points)
-    if min_xrange != None:
-        index = index*(features[:,1]>= min_xrange)
-    if min_yrange != None:
-        index = index*(features[:,2]>= min_yrange)
-    return lidar[index], labels[index]
+    return lidar, labels
 
 
 
@@ -252,7 +224,10 @@ def fv_cylindrical_projection_for_train(lidar,
                                         v_res = 1.8,
                                         h_res = 1.13,
                                         angle_offset = 5,
-                                        clustering = True):
+                                        clustering = True,
+                                        eps = 0.8, 
+                                        min_samples = 1, 
+                                        leaf_size = 30):
                                        
     '''
     lidar: a numpy array of shape N*D, D>=3
@@ -265,7 +240,7 @@ def fv_cylindrical_projection_for_train(lidar,
     return : (360 degree full view + 2*offset) cylindrical projection (or panorama view) of lidar
     '''
     if clustering:
-        lidar, _ = cluster(lidar)
+        lidar, _ = cluster(lidar, eps=eps, min_samples=min_samples, leaf_size=leaf_size)
     else:
          # remove ground points
         lidar = lidar[lidar[:,2]>= -1.4]
@@ -330,7 +305,10 @@ def fv_cylindrical_projection_for_test(lidar,
                                         ver_fov = (-22, 4.),#(-24.9, 2.), 
                                         v_res = 1.8,
                                         h_res = 1.13,
-                                        clustering = True):
+                                        clustering = True,
+                                        eps = 0.8, 
+                                        min_samples = 1, 
+                                        leaf_size = 30):
                                        
     '''
     lidar: a numpy array of shape N*D, D>=3
@@ -341,7 +319,7 @@ def fv_cylindrical_projection_for_test(lidar,
     return : (360 degree full view + 2*offset) cylindrical projection (or panorama view) of lidar
     '''
     if clustering:
-        lidar, labels = cluster(lidar)
+        lidar, labels = cluster(lidar, eps=eps, min_samples=min_samples, leaf_size=leaf_size)
     else:
          # remove ground points
         lidar = lidar[lidar[:,2]>= -1.35]
@@ -351,12 +329,6 @@ def fv_cylindrical_projection_for_test(lidar,
     y = lidar[:,1]
     z = lidar[:,2]
     
-    d = np.sqrt(np.square(x)+np.square(y))
-    if not clustering:
-        # remove near points
-        lidar = lidar[d>=2]
-
-
     theta = np.arctan2(-y, x)
     phi = -np.arctan2(z, d)
        
@@ -370,7 +342,6 @@ def fv_cylindrical_projection_for_test(lidar,
     view = np.zeros([y_max+1, x_max+1, 6],dtype=np.float32)
     if len(lidar) == 0:
         return view, lidar, labels
-
 
     indices = np.logical_and( np.logical_and(x_view >= 0, x_view <= x_max), 
                           np.logical_and(y_view >= 0, y_view <= y_max)  )
