@@ -1,4 +1,36 @@
-# Didi-challenge 2017, Team Korea
+# Didi-Udacity Self Driving Car Challenge 2017
+
+One of the most important aspects of operating an autonomous vehicle is understanding the surrounding environment in order to make safe decisions. Udacity and Didi Chuxing are partnering together to provide incentive for students to come up with the best way to detect obstacles using camera and LIDAR data. This challenge will allow for pedestrian, vehicle, and general obstacle detection that is useful to both human drivers and self-driving car systems.
+
+Competitors will need to process LIDAR and Camera frames to output a set of obstacles, removing noise and environmental returns. Participants will be able to build on the large body of work that has been put into the Kitti datasets and challenges, using existing techniques and their own novel approaches to improve the current state-of-the-art.
+
+- Reference: Self-Driving Car competition, https://challenge.udacity.com/
+
+
+## Contributors
+### Jaeil Park, Truong Hong Minh, Oran Kwon and Hanbin Lee
+
+
+## Methodology
+Detected car and pedestrian in real time (> 10HZ) using LIDAR data only.
+
+### Pedestrian detection
+* Cluster 3D Points using region growing clustering of depth map grid cells
+* Filter out clusters with width and depth
+* Select most probable cluster
+* Track selected cluster
+
+### Car detection
+* Cluster 3D Points using region growing clustering of depth map grid cells
+* Filter out clusters with width and depth
+* Project clustered points on 360 degree panoramic view
+* Predict boxes with pre-trained deep neural network
+* Cluster predicted boxes
+* Select most probable box
+* Track selected box
+
+
+## How to setup
 
 ### How to setup environment
 * Install python-2.7 or Anaconda-2 (recommended)
@@ -44,6 +76,9 @@
         $ qtcreator
 
 * Open catkin_ws/src/CMakeLists.txt on Qt Creator, set build directory to ~/catkin_ws/build
+
+
+## How to run
 
 ### How to run object_tracker
 * Go to catkin workspace
