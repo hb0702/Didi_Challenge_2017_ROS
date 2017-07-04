@@ -25,8 +25,7 @@ Detected car and pedestrian in real time (> 10HZ) using LIDAR data only.
 * Filter out clusters with width and depth
 * Project clustered points on 360 degree panoramic view
 * Predict boxes with pre-trained deep neural network
-* Cluster predicted boxes
-* Select most probable box
+* Cluster boxes and select most probable box
 * Track selected box
 
 
