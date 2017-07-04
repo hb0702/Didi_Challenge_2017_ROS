@@ -21,7 +21,7 @@ typedef Eigen::Vector2f Vector2;
 // parameters
 const int MAX_MARKER_COUNT = 30;
 
-const float GROUND_Z = -1.4f;
+const float GROUND_Z = -1.3f;
 const float GROUND_EPS = 0.1f;
 
 const int PEDESTRIAN_LABEL = 0;
@@ -39,7 +39,7 @@ const float PEDESTRIAN_FILTER_INIT_TIME = 0.5f; // sec
 const float PEDESTRIAN_FILTER_RESET_TIME = 0.5f; // sec
 
 const int CAR_LABEL = 1;
-const float CAR_ROI_RADIUS = 30.0f;
+const float CAR_ROI_RADIUS = 35.0f;
 const float CAR_RESOLUTION = 0.8f;
 const int CAR_MIN_POINT_COUNT = 15;
 const float CAR_MIN_WIDTH = 0.2f;

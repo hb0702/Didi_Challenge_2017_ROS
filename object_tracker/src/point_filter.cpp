@@ -202,9 +202,8 @@ private:
 		BitVector::iterator bit = filterBV.begin();
 		for (; pit != points.end(); ++pit, ++bit)
 		{
-			if (pit->x < -CAR_ROI_RADIUS || pit->x > CAR_ROI_RADIUS
-				|| pit->y < -CAR_ROI_RADIUS || pit->y > CAR_ROI_RADIUS
-				|| pit->z < maxGround_)
+			value_type d = std::sqrt(pit->x * pit->x + pit->y * pit->y);
+			if (d > CAR_ROI_RADIUS || pit->z < maxGround_)
 			{
 				*bit = 1;
 			}
