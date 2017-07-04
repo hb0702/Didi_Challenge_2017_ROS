@@ -1,5 +1,4 @@
 # Didi-challenge 2017, Team Korea
-# The last commit is here in this branch
 
 ### How to setup environment
 * Install python-2.7 or Anaconda-2 (recommended)
