@@ -12,7 +12,7 @@ Jaeil Park, Truong Hong Minh, Oran Kwon and Hanbin Lee
 
 
 ## Methodology
-Detected car and pedestrian in real time (> 10HZ) using LIDAR data only.
+Detected car and pedestrian in real time (> 10HZ) using <b>LIDAR data only</b>.
 
 ### Pedestrian detection
 * Cluster 3D Points using region growing clustering of depth map grid cells
