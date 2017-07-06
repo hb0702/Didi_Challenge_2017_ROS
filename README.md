@@ -8,7 +8,7 @@ Competitors will need to process LIDAR and Camera frames to output a set of obst
 
 
 ## Contributors
-### Jaeil Park, Truong Hong Minh, Oran Kwon and Hanbin Lee
+Jaeil Park, Truong Hong Minh, Oran Kwon and Hanbin Lee
 
 
 ## Methodology
