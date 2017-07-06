@@ -20,6 +20,8 @@ Detected car and pedestrian in real time (> 10HZ) using LIDAR data only.
 * Select most probable cluster
 * Track selected cluster
 
+![Pedestrian](ref_scripts/ped.gif)
+
 ### Car detection
 * Cluster 3D Points using region growing clustering of depth map grid cells
 * Filter out clusters with width and depth
@@ -28,6 +30,7 @@ Detected car and pedestrian in real time (> 10HZ) using LIDAR data only.
 * Cluster boxes and select most probable box
 * Track selected box
 
+![Car](ref_scripts/car.gif)
 
 ## How to setup
 
